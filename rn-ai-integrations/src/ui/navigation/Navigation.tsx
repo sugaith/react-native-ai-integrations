@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { ConversationListScreen } from '../screens/ConversationListScreen'
 import { ChatScreen } from '../screens/ChatScreen'
 import { CameraScreen } from '../screens/CameraScreen'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 type StackNavigatorScreens = {
   ConversationListScreen: undefined

@@ -4,6 +4,7 @@ import { useConversationStore } from 'src/store/ConversationStore'
 import { useCameraPermissions } from 'expo-camera'
 import { NewConversationButton } from 'src/ui/components/NewButton'
 import { ConversationItem, SearchInput } from 'src/ui/components'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 function ConversationListScreen() {
   const [permission, requestPermission] = useCameraPermissions()
@@ -25,7 +26,7 @@ function ConversationListScreen() {
   })
 
   return (
-    <View style={{ padding: 4, flex: 1 }}>
+    <SafeAreaView style={{ padding: 4, flex: 1 }}>
       {!conversationList.length ? (
         <View
           style={{ justifyContent: 'center', alignItems: 'center', flex: 1 }}
@@ -50,7 +51,7 @@ function ConversationListScreen() {
       )}
 
       <NewConversationButton />
-    </View>
+    </SafeAreaView>
   )
 }
 

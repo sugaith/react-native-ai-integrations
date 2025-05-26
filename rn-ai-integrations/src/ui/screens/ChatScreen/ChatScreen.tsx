@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { GiftedChat, MessageProps } from 'react-native-gifted-chat'
 import { IMessageBase64 } from 'src/apis/openAi'
 import { useConversationStore } from 'src/store/ConversationStore'
-import { Button } from 'react-native'
+import { Button, View } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import {
   useConversationStartUp,
@@ -11,8 +11,9 @@ import {
   useSaveConversationOnExit,
 } from './helpers'
 import { MessageBubble } from './MessageBubble'
-import { ChatHeader } from 'src/ui/components'
+import { ChatHeader, Spacer } from 'src/ui/components'
 import { MYSELF_USER } from 'src/utils'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 type IMessageLike = IMessageBase64 & { like?: boolean }
 
@@ -61,6 +62,8 @@ function ChatScreen() {
     [toggleLikeAction],
   )
 
+  const { bottom } = useSafeAreaInsets()
+
   return (
     <>
       <ChatHeader />
@@ -74,6 +77,8 @@ function ChatScreen() {
         keyboardShouldPersistTaps="handled"
         renderMessage={renderMessage}
       />
+
+      <Spacer size={bottom} />
     </>
   )
 }
