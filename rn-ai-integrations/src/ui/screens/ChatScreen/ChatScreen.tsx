@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { GiftedChat, MessageProps } from 'react-native-gifted-chat'
 import { IMessageBase64 } from 'src/apis/openAi'
 import { useConversationStore } from 'src/store/ConversationStore'
-import { Button, View } from 'react-native'
+import { Button } from 'react-native'
 import { useNavigation } from '@react-navigation/native'
 import {
   useConversationStartUp,
