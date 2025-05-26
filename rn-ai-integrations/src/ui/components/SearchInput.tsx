@@ -11,7 +11,7 @@ function SearchInput({ searchQuery, setSearchQuery }: SearchInputProp) {
     <TextInput
       placeholder="Search past chats..."
       value={searchQuery}
-      onChangeText={setSearchQuery} 
+      onChangeText={setSearchQuery}
       placeholderTextColor="gray"
     />
   )

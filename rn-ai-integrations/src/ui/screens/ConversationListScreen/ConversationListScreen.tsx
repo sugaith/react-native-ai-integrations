@@ -25,9 +25,11 @@ function ConversationListScreen() {
   })
 
   return (
-    <View style={{padding: 4, flex: 1}}>
+    <View style={{ padding: 4, flex: 1 }}>
       {!conversationList.length ? (
-        <View style={{justifyContent: 'center', alignItems: 'center', flex: 1}}>
+        <View
+          style={{ justifyContent: 'center', alignItems: 'center', flex: 1 }}
+        >
           <Text>Start a new conversation</Text>
         </View>
       ) : (

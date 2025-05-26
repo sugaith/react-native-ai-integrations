@@ -10,7 +10,7 @@ function CameraScreen() {
     useCameraActions(cameraRef)
 
   return (
-    <View style={{flex: 1, justifyContent: 'center'}}>
+    <View style={{ flex: 1, justifyContent: 'center' }}>
       <CameraView
         ref={cameraRef as Ref<CameraView>}
         style={styles.camera}
@@ -18,12 +18,26 @@ function CameraScreen() {
       >
         <TouchableOpacity
           onPress={takePicture}
-          style={{width: 50, height: 50, backgroundColor:'green', position: 'absolute', bottom: 8, alignSelf: 'center'}}
+          style={{
+            width: 50,
+            height: 50,
+            backgroundColor: 'green',
+            position: 'absolute',
+            bottom: 8,
+            alignSelf: 'center',
+          }}
         />
 
         <TouchableOpacity
           onPress={toggleCameraFacing}
-          style={{width: 50, height: 50, backgroundColor:'red', position: 'absolute', right: 8, top: 8}}
+          style={{
+            width: 50,
+            height: 50,
+            backgroundColor: 'red',
+            position: 'absolute',
+            right: 8,
+            top: 8,
+          }}
         />
       </CameraView>
     </View>

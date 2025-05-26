@@ -50,12 +50,7 @@ function ChatScreen() {
   useSaveConversationOnExit(messagesRef)
 
   const renderCameraButton = useCallback(
-    () => (
-      <Button
-        title='camera'
-        onPress={() => navigate('CameraScreen')}
-      />
-    ),
+    () => <Button title="camera" onPress={() => navigate('CameraScreen')} />,
     [navigate],
   )
 

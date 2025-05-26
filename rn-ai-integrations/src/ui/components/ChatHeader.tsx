@@ -12,7 +12,7 @@ function ChatHeader() {
 
   return (
     <View padding={'$2'}>
-      <Button title='go-back'  onPress={onGoBack} />
+      <Button title="go-back" onPress={onGoBack} />
     </View>
   )
 }

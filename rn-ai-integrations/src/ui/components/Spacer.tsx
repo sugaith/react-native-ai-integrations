@@ -1,9 +1,11 @@
-import { View } from "react-native";
+import { View } from 'react-native'
 
 type SpacerProps = {
-    size: number
+  size: number
 }
 
-const Spacer = ({size}: SpacerProps) => <View style={{height: size, width: size}} />
+const Spacer = ({ size }: SpacerProps) => (
+  <View style={{ height: size, width: size }} />
+)
 
-export {Spacer}
+export { Spacer }

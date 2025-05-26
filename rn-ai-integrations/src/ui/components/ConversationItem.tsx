@@ -33,24 +33,19 @@ const ConversationItem = ({ conversation }: ConversationItemProps) => {
       //   </Avatar>
       // }
     >
-      <View >
+      <View>
         <View>
-          <Text >
-            {lastMessage?.user.name}
-          </Text>
+          <Text>{lastMessage?.user.name}</Text>
 
           <Spacer size={3} />
 
-          <Text >
+          <Text>
             {lastMessage?.createdAt.toLocaleString() ||
               new Date().toLocaleString()}
           </Text>
         </View>
 
-        <Text
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
+        <Text numberOfLines={1} ellipsizeMode="tail">
           {lastMessage?.text.substring(0, 45) + '...'}
         </Text>
       </View>

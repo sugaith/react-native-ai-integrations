@@ -14,12 +14,7 @@ function NewConversationButton() {
     navigate('ChatScreen')
   }
 
-  return (
-    <Button
-      title='New'
-      onPress={createNewConversationAndNavigate}
-    />
-  )
+  return <Button title="New" onPress={createNewConversationAndNavigate} />
 }
 
 export { NewConversationButton }
