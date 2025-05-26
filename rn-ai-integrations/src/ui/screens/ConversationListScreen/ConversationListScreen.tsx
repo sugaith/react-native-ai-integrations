@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { FlatList, Text, View } from 'react-native'
 import { useConversationStore } from 'src/store/ConversationStore'
 import { useCameraPermissions } from 'expo-camera'
-
-
-
 import { NewConversationButton } from 'src/ui/components/NewButton'
 import { ConversationItem, SearchInput } from 'src/ui/components'
 
@@ -28,10 +25,10 @@ function ConversationListScreen() {
   })
 
   return (
-    <View style={{backgroundColor: 'black', padding: 4, flex: 1}}>
+    <View style={{padding: 4, flex: 1}}>
       {!conversationList.length ? (
         <View style={{justifyContent: 'center', alignItems: 'center', flex: 1}}>
-          <Text style={{color: 'white'}}>Start a new conversation</Text>
+          <Text>Start a new conversation</Text>
         </View>
       ) : (
         <>

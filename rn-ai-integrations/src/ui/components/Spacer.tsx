@@ -4,9 +4,6 @@ type SpacerProps = {
     size: number
 }
 
-const SpacerY = ({size}: SpacerProps) => <View style={{height: size}} />
-const SpacerX = ({size}: SpacerProps) => <View style={{width: size}} />
-
-const Spacer = {Y: SpacerY, X: SpacerX}
+const Spacer = ({size}: SpacerProps) => <View style={{height: size, width: size}} />
 
 export {Spacer}

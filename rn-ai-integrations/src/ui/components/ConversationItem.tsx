@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native'
 import { useCallback } from 'react'
-import { Button, View, Text, TouchableHighlight } from 'react-native'
+import { View, Text, TouchableOpacity } from 'react-native'
 import { Conversation, useConversationStore } from 'src/store/ConversationStore'
 import { Spacer } from './Spacer'
 
@@ -21,7 +21,7 @@ const ConversationItem = ({ conversation }: ConversationItemProps) => {
   const lastMessage = conversation.messages.at(0)
 
   return (
-    <TouchableHighlight
+    <TouchableOpacity
       onPress={openConversation}
       // icon={
       //   <Avatar circular size="$3">
@@ -39,7 +39,7 @@ const ConversationItem = ({ conversation }: ConversationItemProps) => {
             {lastMessage?.user.name}
           </Text>
 
-          <Spacer size={'$3'} />
+          <Spacer size={3} />
 
           <Text >
             {lastMessage?.createdAt.toLocaleString() ||
@@ -54,7 +54,7 @@ const ConversationItem = ({ conversation }: ConversationItemProps) => {
           {lastMessage?.text.substring(0, 45) + '...'}
         </Text>
       </View>
-    </TouchableHighlight>
+    </TouchableOpacity>
   )
 }
 
