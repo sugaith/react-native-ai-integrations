@@ -1,39 +1,29 @@
 import { CameraView } from 'expo-camera'
-import { LegacyRef, useRef } from 'react'
-import { Button, StyleSheet, View } from 'react-native'
+import { Ref, useRef } from 'react'
+import { StyleSheet, TouchableOpacity, View } from 'react-native'
 import { useCameraActions } from '../ChatScreen/helpers'
 
 function CameraScreen() {
-  const cameraRef = useRef<CameraView>()
+  const cameraRef = useRef<CameraView>(undefined)
 
   const { takePicture, toggleCameraFacing, facing } =
     useCameraActions(cameraRef)
 
   return (
-    <View flex={1} justifyContent="center">
+    <View style={{flex: 1, justifyContent: 'center'}}>
       <CameraView
-        ref={cameraRef as LegacyRef<CameraView>}
+        ref={cameraRef as Ref<CameraView>}
         style={styles.camera}
         facing={facing}
       >
-        <Button
+        <TouchableOpacity
           onPress={takePicture}
-          scaleIcon={1.5}
-          scale={1.5}
-          borderRadius={'$12'}
-          position="absolute"
-          alignSelf="center"
-          bottom="$8"
+          style={{width: 50, height: 50, backgroundColor:'green', position: 'absolute', bottom: 8, alignSelf: 'center'}}
         />
 
-        <Button
+        <TouchableOpacity
           onPress={toggleCameraFacing}
-          scaleIcon={1.5}
-          scale={1.5}
-          borderRadius={'$12'}
-          position="absolute"
-          right="$8"
-          top="$8"
+          style={{width: 50, height: 50, backgroundColor:'red', position: 'absolute', right: 8, top: 8}}
         />
       </CameraView>
     </View>
