@@ -1,4 +1,8 @@
-import { useSpeechToText, LLAMA3_2_1B_SPINQUANT } from 'react-native-executorch'
+import {
+  useSpeechToText,
+  LLAMA3_2_1B_SPINQUANT,
+  STREAMING_ACTION,
+} from 'react-native-executorch'
 import {
   Text,
   View,
@@ -27,21 +31,6 @@ const audioStreamOptions = {
   bufferSize: 16000,
 }
 
-const startStreamingAudio = (options: any, onChunk: (data: string) => void) => {
-  console.log('startStreamingAudio')
-
-  LiveAudioStream.init(options)
-
-  console.log('steam audio initiated....')
-
-  LiveAudioStream.on('data', onChunk)
-  console.log('event added')
-
-  LiveAudioStream.start()
-
-  console.log('stream started')
-}
-
 const float32ArrayFromPCMBinaryBuffer = (b64EncodedBuffer: string) => {
   const b64DecodedChunk = Buffer.from(b64EncodedBuffer, 'base64')
   const int16Array = new Int16Array(b64DecodedChunk.buffer)
@@ -68,7 +57,12 @@ export const SpeechToTextScreen = () => {
     sequence,
     error,
     transcribe,
-  } = useSpeechToText({ modelName: 'moonshine', streamingConfig: 'balanced' })
+    streamingTranscribe,
+  } = useSpeechToText({
+    modelName: 'moonshine',
+    windowSize: 3,
+    overlapSeconds: 0.9,
+  })
 
   const loadAudio = async (
     url: string,
@@ -149,10 +143,17 @@ export const SpeechToTextScreen = () => {
   const [modalVisible, setModalVisible] = useState(false)
 
   const onChunk = (data: string) => {
-    console.log('on chunk...')
+    console.log('on chunk...', data.length)
 
     const float32Chunk = float32ArrayFromPCMBinaryBuffer(data)
-    audioBuffer.current?.push(...float32Chunk) // Spreads Float32Array into number[]
+
+    console.log('will transcribe stream!!!!')
+
+    // streamingTranscribe(STREAMING_ACTION.DATA, Array.from(float32Chunk))
+
+    console.log('--> did transcribe stream!!!!')
+
+    audioBuffer.current?.push(...Array.from(float32Chunk)) // Spreads Float32Array into number[]
   }
 
   console.log('rendered...........')
@@ -176,11 +177,31 @@ export const SpeechToTextScreen = () => {
     if (isRecording) {
       LiveAudioStream.stop()
       setIsRecording(false)
+      console.log('will transcribe!!!!')
+
       await transcribe(audioBuffer.current) // Transcribe call for live recording
+
+      console.log('--> done transcribing!!!!!!')
+
       audioBuffer.current = []
+
+      //   streamingTranscribe(STREAMING_ACTION.STOP)
     } else {
       setIsRecording(true)
-      startStreamingAudio(audioStreamOptions, onChunk)
+      console.log('startStreamingAudio')
+
+      LiveAudioStream.init(audioStreamOptions as any)
+
+      console.log('steam audio initiated....')
+
+      LiveAudioStream.on('data', onChunk)
+      console.log('event added')
+
+      LiveAudioStream.start()
+
+      console.log('stream started')
+      //   startStreamingAudio(audioStreamOptions, onChunk)
+      //   streamingTranscribe(STREAMING_ACTION.START)
     }
   }
 
