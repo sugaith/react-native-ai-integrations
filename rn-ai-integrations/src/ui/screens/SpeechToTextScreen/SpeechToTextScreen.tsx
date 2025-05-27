@@ -17,6 +17,7 @@ import DeviceInfo from 'react-native-device-info'
 import * as FileSystem from 'expo-file-system'
 import { AudioContext } from 'react-native-audio-api'
 import { InputPrompt } from 'src/ui/components/TextInputModal'
+import { Asset } from 'expo-asset'
 
 const audioStreamOptions = {
   sampleRate: 16000,
@@ -55,6 +56,10 @@ const float32ArrayFromPCMBinaryBuffer = (b64EncodedBuffer: string) => {
   return float32Array
 }
 
+const harvardMp3Asset = Asset.fromModule(
+  require('../../../../assets/harvardmp3.mp3'),
+)
+
 export const SpeechToTextScreen = () => {
   const {
     isGenerating,
@@ -65,27 +70,89 @@ export const SpeechToTextScreen = () => {
     transcribe,
   } = useSpeechToText({ modelName: 'moonshine', streamingConfig: 'balanced' })
 
-  const loadAudio = async (url: string) => {
+  const loadAudio = async (
+    url: string,
+    isLocalAsset: boolean = false,
+  ): Promise<number[]> => {
     const audioContext = new AudioContext({ sampleRate: 16e3 })
-    const audioBuffer = await FileSystem.downloadAsync(
-      url,
-      FileSystem.documentDirectory + '_tmp_transcribe_audio.mp3',
-    ).then(({ uri }) => {
-      return audioContext.decodeAudioDataSource(uri)
-    })
-    return Array.from(audioBuffer?.getChannelData(0))
+    const tempFileName =
+      isLocalAsset && url.endsWith('.wav')
+        ? '_tmp_transcribe_audio.wav'
+        : '_tmp_transcribe_audio.mp3'
+    const destinationUri = FileSystem.documentDirectory + tempFileName
+
+    console.log(
+      `Attempting to load audio from: ${url}, temp file: ${destinationUri}`,
+    )
+
+    try {
+      console.log(`Starting download/copy from ${url} to ${destinationUri}`)
+      const downloadResult = await FileSystem.downloadAsync(url, destinationUri)
+      console.log(
+        'Audio downloaded/copied to:',
+        downloadResult.uri,
+        'Status:',
+        downloadResult.status,
+      )
+
+      if (downloadResult.status !== 200 && isLocalAsset === false) {
+        throw new Error(
+          `Failed to download audio file. Status: ${downloadResult.status}`,
+        )
+      }
+      if (!downloadResult.uri) {
+        throw new Error('Downloaded audio URI is undefined.')
+      }
+
+      console.log('Decoding audio data source:', downloadResult.uri)
+      const decodedBuffer = await audioContext.decodeAudioDataSource(
+        downloadResult.uri,
+      )
+
+      if (!decodedBuffer) {
+        console.error(
+          'Failed to decode audio data source: decodedBuffer is null or undefined',
+        )
+        throw new Error('Failed to decode audio data source')
+      }
+      console.log(
+        `Decoded buffer - SampleRate: ${decodedBuffer.sampleRate}, Channels: ${decodedBuffer.numberOfChannels}, Duration: ${decodedBuffer.duration}s`,
+      )
+
+      const channelData = decodedBuffer.getChannelData(0)
+      if (!channelData) {
+        console.error(
+          'Failed to get channel data (channel 0) from decoded buffer.',
+        )
+        throw new Error('Failed to get channel data from decoded buffer')
+      }
+      console.log(
+        `Successfully retrieved channel data. Length: ${channelData.length}`,
+      )
+
+      return Array.from(channelData) // Convert Float32Array to number[]
+    } catch (err: any) {
+      console.error('Error in loadAudio:', err.message, err.stack)
+      try {
+        await FileSystem.deleteAsync(destinationUri, { idempotent: true })
+        console.log('Temporary audio file deleted:', destinationUri)
+      } catch (deleteError) {
+        console.error('Error deleting temporary audio file:', deleteError)
+      }
+      throw err
+    }
   }
 
   const [isRecording, setIsRecording] = useState(false)
   const [audioUrl, setAudioUrl] = useState('')
-  const audioBuffer = useRef<number[]>([])
+  const audioBuffer = useRef<number[]>([]) // For live recording, this remains number[] as per current logic
   const [modalVisible, setModalVisible] = useState(false)
 
   const onChunk = (data: string) => {
     console.log('on chunk...')
 
     const float32Chunk = float32ArrayFromPCMBinaryBuffer(data)
-    audioBuffer.current?.push(...float32Chunk)
+    audioBuffer.current?.push(...float32Chunk) // Spreads Float32Array into number[]
   }
 
   console.log('rendered...........')
@@ -109,11 +176,65 @@ export const SpeechToTextScreen = () => {
     if (isRecording) {
       LiveAudioStream.stop()
       setIsRecording(false)
-      await transcribe(audioBuffer.current)
+      await transcribe(audioBuffer.current) // Transcribe call for live recording
       audioBuffer.current = []
     } else {
       setIsRecording(true)
       startStreamingAudio(audioStreamOptions, onChunk)
+    }
+  }
+
+  const handleTranscribeLocalMp3 = async () => {
+    if (!isReady || isGenerating) {
+      console.log('Transcription not ready or already generating.')
+      return
+    }
+    let loadedAudioData: number[] | undefined = undefined
+    try {
+      console.log('Attempting to load local harvardmp3.mp3 asset.')
+      if (!harvardMp3Asset) {
+        throw new Error('harvardMp3Asset is not initialized.')
+      }
+      if (!harvardMp3Asset.downloaded) {
+        console.log(
+          'Local asset (harvardmp3.mp3) not yet downloaded, downloading now...',
+        )
+        await harvardMp3Asset.downloadAsync()
+        console.log('Local asset (harvardmp3.mp3) downloaded.')
+      }
+      if (!harvardMp3Asset.uri) {
+        throw new Error('Local asset URI (harvardmp3.mp3) is not available.')
+      }
+      console.log('Local MP3 asset URI:', harvardMp3Asset.uri)
+      loadedAudioData = await loadAudio(harvardMp3Asset.uri, true) // Pass true for isLocalAsset
+
+      if (!loadedAudioData || loadedAudioData.length === 0) {
+        throw new Error(
+          'Failed to load or got empty audio data from harvardmp3.mp3.',
+        )
+      }
+      console.log(
+        `MP3 audio loaded. Length: ${loadedAudioData.length}. Sample: ${loadedAudioData.slice(0, 5)}. Transcribing...`,
+      )
+      await transcribe(loadedAudioData)
+      console.log('MP3 transcription call completed.')
+    } catch (e: any) {
+      console.error('Error in handleTranscribeLocalMp3:', e.message, e.stack)
+    }
+  }
+
+  const handleTranscribeFromUrlInput = async () => {
+    if (!audioUrl || !isReady || isGenerating) return
+    try {
+      console.log('Attempting to load audio from URL:', audioUrl)
+      const loadedAudio = await loadAudio(audioUrl, false)
+      if (!loadedAudio || typeof loadedAudio.length === 'undefined') {
+        console.error('loadAudio from URL did not return valid audio data.')
+        throw new Error('Failed to load audio data from URL for transcription.')
+      }
+      await transcribe(loadedAudio)
+    } catch (e: any) {
+      console.error('Error transcribing from URL input:', e.message, e.stack)
     }
   }
 
@@ -159,12 +280,11 @@ export const SpeechToTextScreen = () => {
         )}
         <InputPrompt
           modalVisible={modalVisible}
-          setModalVisible={async (visible: boolean) => {
-            setModalVisible(visible)
-            if (audioUrl) {
-              const loadedAudio = await loadAudio(audioUrl)
-              await transcribe(loadedAudio)
+          setModalVisible={(newVisibilityState: boolean) => {
+            if (!newVisibilityState && modalVisible && audioUrl) {
+              handleTranscribeFromUrlInput()
             }
+            setModalVisible(newVisibilityState)
           }}
           onChangeText={setAudioUrl}
           value={audioUrl}
@@ -173,26 +293,43 @@ export const SpeechToTextScreen = () => {
           <View
             style={[
               styles.recordingButtonWrapper,
-              buttonDisabled && styles.borderGrey,
+              (buttonDisabled || isRecording) && styles.borderGrey,
             ]}
           >
             <TouchableOpacity
-              disabled={buttonDisabled}
+              disabled={buttonDisabled || isRecording}
               style={[
                 styles.recordingButton,
-                buttonDisabled && styles.backgroundGrey,
+                (buttonDisabled || isRecording) && styles.backgroundGrey,
               ]}
-              onPress={async () => {
-                if (!audioUrl) {
-                  setModalVisible(true)
-                } else {
-                  const loadedAudio = await loadAudio(audioUrl)
-                  await transcribe(loadedAudio)
-                }
+              onPress={() => {
+                setAudioUrl('')
+                setModalVisible(true)
               }}
             >
               <Text style={[styles.recordingButtonText, styles.font13]}>
                 TRANSCRIBE FROM URL
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.iconsContainer}>
+          <View
+            style={[
+              styles.recordingButtonWrapper,
+              (buttonDisabled || isRecording) && styles.borderGrey,
+            ]}
+          >
+            <TouchableOpacity
+              disabled={buttonDisabled || isRecording}
+              style={[
+                styles.recordingButton,
+                (buttonDisabled || isRecording) && styles.backgroundGrey,
+              ]}
+              onPress={handleTranscribeLocalMp3}
+            >
+              <Text style={[styles.recordingButtonText, styles.font13]}>
+                TEST LOCAL HARVARD.MP3
               </Text>
             </TouchableOpacity>
           </View>
