@@ -4,7 +4,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start --clear",
-    "android": "expo start --android",
+    "android": "expo start --android --clear",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint"
@@ -12,6 +12,7 @@
   "dependencies": {
     "@react-navigation/native": "^7.1.9",
     "@react-navigation/native-stack": "^7.3.13",
+    "buffer": "^6.0.3",
     "expo": "~53.0.9",
     "expo-camera": "~16.1.6",
     "expo-dev-client": "~5.1.8",

@@ -1,3 +1,5 @@
 rn-ai-integrations/.env
 rn-ai-integrations/build-*.apk
 .DS_Store
+.idea/
+backends/.env

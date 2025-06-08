@@ -5,6 +5,7 @@ import {
   ChatScreen,
   ConversationListScreen,
   SpeechToTextScreen,
+  LiveAudioScreen, // Added import
 } from '../screens/'
 
 type StackNavigatorScreens = {
@@ -12,6 +13,7 @@ type StackNavigatorScreens = {
   ChatScreen: undefined
   CameraScreen: undefined
   SpeechToTextScreen: undefined
+  LiveAudioScreen: undefined // Added screen to type
 }
 
 declare global {
@@ -25,25 +27,27 @@ const Stack = createNativeStackNavigator<StackNavigatorScreens>()
 function Navigation() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="SpeechToTextScreen">
+      <Stack.Navigator initialRouteName="LiveAudioScreen">
+        <Stack.Screen
+          name="LiveAudioScreen" // Added LiveAudioScreen
+          component={LiveAudioScreen}
+          options={{ title: 'Live Audio' }}
+        />
         <Stack.Screen
           name="ConversationListScreen"
           component={ConversationListScreen}
           options={{ title: 'Your Chats' }}
         />
-
         <Stack.Screen
           name="ChatScreen"
           component={ChatScreen}
           options={{ headerShown: false }}
         />
-
         <Stack.Screen
           name="SpeechToTextScreen"
           component={SpeechToTextScreen}
           options={{ headerShown: false }}
         />
-
         <Stack.Screen name="CameraScreen" component={CameraScreen} />
       </Stack.Navigator>
     </NavigationContainer>
