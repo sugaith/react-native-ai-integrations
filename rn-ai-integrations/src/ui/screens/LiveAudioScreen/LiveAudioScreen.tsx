@@ -1,25 +1,34 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { View, Text, StyleSheet } from 'react-native'
-import { AudioContext, AudioBufferSourceNode } from 'react-native-audio-api'
-import * as FileSystem from 'expo-file-system'
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  PermissionsAndroid,
+  Platform,
+} from 'react-native'
+// import * as FileSystem from 'expo-file-system' // No longer needed for audioStreamOptions here
+import LiveAudioStream from 'react-native-live-audio-stream'
+
+const audioStreamOptions = {
+  sampleRate: 16000,
+  channels: 1,
+  bitsPerSample: 16,
+  audioSource: 1,
+  bufferSize: 16000,
+}
 
 const LiveAudioScreen = () => {
   const [status, setStatus] = useState('Connecting...')
-  const [audioQueue, setAudioQueue] = useState<string[]>([])
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
   const ws = useRef<WebSocket | null>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
+  const audioBuffer = useRef<number[]>([]) // For live recording, this remains number[] as per current logic
 
   useEffect(() => {
-    audioContextRef.current = new AudioContext()
-
-    // ws.current = new WebSocket('ws://localhost:9083')
-    ws.current = new WebSocket('ws://192.168.1.107:9083') // Updated WebSocket URL
+    ws.current = new WebSocket('ws://192.168.1.107:9083')
 
     ws.current.onopen = () => {
       setStatus('Connected to WebSocket. Waiting for audio...')
-      ws.current?.send(JSON.stringify({ setup: {} }))
     }
 
     ws.current.onmessage = (event) => {
@@ -27,10 +36,8 @@ const LiveAudioScreen = () => {
         const message = JSON.parse(event.data as string)
         if (message.audio) {
           console.log('Audio data received')
-          setAudioQueue((prevQueue) => [...prevQueue, message.audio])
         } else if (message.text) {
           console.log('Text message received:', message.text)
-          // setStatus(`Received text: ${message.text}`)
         }
       } catch (error) {
         console.error('Error processing message:', error)
@@ -50,113 +57,136 @@ const LiveAudioScreen = () => {
 
     return () => {
       ws.current?.close()
-      if (sourceNodeRef.current) {
-        try {
-          sourceNodeRef.current.stop()
-          sourceNodeRef.current.disconnect()
-        } catch (e) {
-          console.warn(
-            'Error stopping/disconnecting source node on unmount:',
-            e,
-          )
-        }
-      }
-      audioContextRef.current
-        ?.close()
-        .catch((e) =>
-          console.error('Failed to close audio context on unmount', e),
-        )
     }
   }, [])
 
-  useEffect(() => {
-    const playNextAudio = async () => {
-      if (audioQueue.length > 0 && !isPlaying && audioContextRef.current) {
-        setIsPlaying(true)
-        const base64Audio = audioQueue[0]
-        const audioContext = audioContextRef.current
-        const tempFileUri = `${FileSystem.cacheDirectory}temp_audio_chunk_${Date.now()}.mp3`
+  const sendAudio = (data: number[]) => {
+    console.log(
+      `LiveAudioScreen: onChunk called. Data length: ${data.length}, WS readyState: ${ws.current?.readyState}`,
+    )
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log('LiveAudioScreen: Sending audio chunk to WebSocket server...')
+      ws.current.send(
+        JSON.stringify({
+          realtime_input: {
+            media_chunks: [{ mime_type: 'audio/pcm', data: data }],
+          },
+        }),
+      )
+    } else {
+      console.log(
+        'LiveAudioScreen: onChunk called, but WebSocket is not open or not available.',
+      )
+      if (ws.current) {
+        console.log(
+          `LiveAudioScreen: WebSocket actual readyState: ${ws.current.readyState}, WebSocket URL: ${ws.current.url}`,
+        )
+      } else {
+        console.log('LiveAudioScreen: WebSocket (ws.current) is null.')
+      }
+    }
+  }
 
-        try {
-          console.log(
-            'Attempting to play audio chunk via react-native-audio-api...',
-          )
+  const float32ArrayFromPCMBinaryBuffer = (b64EncodedBuffer: string) => {
+    const b64DecodedChunk = Buffer.from(b64EncodedBuffer, 'base64')
+    const int16Array = new Int16Array(b64DecodedChunk.buffer)
 
-          await FileSystem.writeAsStringAsync(tempFileUri, base64Audio, {
-            encoding: FileSystem.EncodingType.Base64,
-          })
-          console.log('Audio chunk saved to temporary file:', tempFileUri)
+    const float32Array = new Float32Array(int16Array.length)
+    for (let i = 0; i < int16Array.length; i++) {
+      float32Array[i] = Math.max(
+        -1,
+        Math.min(1, (int16Array[i] / audioStreamOptions.bufferSize) * 8),
+      )
+    }
+    return float32Array
+  }
 
-          const audioBuffer =
-            await audioContext.decodeAudioDataSource(tempFileUri)
+  const onChunk = (data: string) => {
+    console.log('on chunk...', data.length)
 
-          console.log('Audio chunk decoded.')
+    const float32Chunk = float32ArrayFromPCMBinaryBuffer(data)
 
-          if (!audioBuffer) {
-            throw new Error('Failed to decode audio data source.')
-          }
+    console.log('will transcribe stream!!!!')
 
-          if (sourceNodeRef.current) {
-            try {
-              sourceNodeRef.current.stop()
-              sourceNodeRef.current.disconnect()
-            } catch (e) {
-              console.warn(
-                'Error stopping/disconnecting previous source node:',
-                e,
-              )
-            }
-          }
+    // streamingTranscribe(STREAMING_ACTION.DATA, Array.from(float32Chunk))
 
-          const sourceNode = audioContext.createBufferSource()
-          sourceNodeRef.current = sourceNode
-          sourceNode.buffer = audioBuffer
-          sourceNode.connect(audioContext.destination)
+    console.log('--> did transcribe stream!!!!')
 
-          sourceNode.onended = () => {
-            console.log('Audio chunk finished playing.')
-            setIsPlaying(false)
-            setAudioQueue((prevQueue) => prevQueue.slice(1))
-            try {
-              sourceNode.disconnect()
-            } catch (e) {
-              console.warn('Error disconnecting source node onended:', e)
-            }
-            sourceNodeRef.current = null
-            FileSystem.deleteAsync(tempFileUri, { idempotent: true })
-              .then(() =>
-                console.log('Temporary audio file deleted:', tempFileUri),
-              )
-              .catch((e) =>
-                console.error('Error deleting temporary audio file:', e),
-              )
-          }
+    audioBuffer.current?.push(...Array.from(float32Chunk)) // Spreads Float32Array into number[]
+  }
 
-          sourceNode.start()
-          setStatus('Playing audio...')
-        } catch (error: any) {
-          console.error(
-            'Error playing audio with react-native-audio-api:',
-            error,
-          )
-          setStatus(`Error playing audio: ${error.message || error}`)
-          setIsPlaying(false)
-          setAudioQueue((prevQueue) => prevQueue.slice(1))
-          FileSystem.deleteAsync(tempFileUri, { idempotent: true }).catch((e) =>
-            console.error('Error deleting temp file on error:', e),
-          )
+  const handleRecordPress = async () => {
+    if (Platform.OS === 'android') {
+      const permission = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      )
+      if (!permission) {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        )
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Microphone permission denied')
+          return
         }
       }
     }
 
-    playNextAudio()
-  }, [audioQueue, isPlaying])
+    if (isRecording) {
+      LiveAudioStream.stop()
+      setIsRecording(false)
+      console.log('will transcribe!!!!')
+
+      sendAudio(audioBuffer.current)
+
+      console.log('--> done transcribing!!!!!!')
+
+      audioBuffer.current = []
+
+      //   streamingTranscribe(STREAMING_ACTION.STOP)
+    } else {
+      ws.current?.send(JSON.stringify({ setup: {} }))
+
+      setIsRecording(true)
+      console.log('startStreamingAudio')
+
+      LiveAudioStream.init(audioStreamOptions as any)
+
+      console.log('steam audio initiated....')
+
+      LiveAudioStream.on('data', onChunk)
+      console.log('event added')
+
+      LiveAudioStream.start()
+
+      console.log('stream started')
+      //   startStreamingAudio(audioStreamOptions, onChunk)
+      //   streamingTranscribe(STREAMING_ACTION.START)
+    }
+  }
+
+  const recordingButtonDisabled =
+    !ws.current || ws.current.readyState !== WebSocket.OPEN
 
   return (
     <View style={styles.container}>
-      <Text style={styles.statusText}>{status}</Text>
-      <Text style={styles.queueText}>
-        Audio chunks in queue: {audioQueue.length}
+      <Text style={styles.title}>Live Audio Stream</Text>
+      <Text style={styles.status}>{status}</Text>
+      <TouchableOpacity
+        style={[
+          styles.recordButton,
+          isRecording ? styles.recording : styles.notRecording,
+        ]}
+        onPress={handleRecordPress}
+        disabled={recordingButtonDisabled}
+      >
+        <Text style={styles.buttonText}>
+          {isRecording ? 'Stop Recording' : 'Start Recording'}
+        </Text>
+      </TouchableOpacity>
+      <Text style={styles.instructions}>
+        {isRecording
+          ? 'Recording audio and sending to server...'
+          : 'Press the button to start recording audio.'}
       </Text>
     </View>
   )
@@ -167,18 +197,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#fff',
   },
-  statusText: {
-    fontSize: 18,
-    textAlign: 'center',
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 20,
   },
-  queueText: {
+  status: {
     fontSize: 16,
-    textAlign: 'center',
     marginBottom: 20,
+  },
+  recordButton: {
+    width: 200,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  recording: {
+    backgroundColor: 'red',
+  },
+  notRecording: {
+    backgroundColor: 'green',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  instructions: {
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    fontSize: 16,
   },
 })
 
