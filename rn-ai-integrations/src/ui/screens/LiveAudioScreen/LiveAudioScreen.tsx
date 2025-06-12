@@ -9,6 +9,7 @@ import {
 } from 'react-native'
 // import * as FileSystem from 'expo-file-system' // No longer needed for audioStreamOptions here
 import LiveAudioStream from 'react-native-live-audio-stream'
+import { Buffer } from 'buffer'
 
 const audioStreamOptions = {
   sampleRate: 16000,
@@ -101,10 +102,10 @@ const LiveAudioScreen = () => {
     return float32Array
   }
 
-  const onChunk = (data: string) => {
+  const onChunk = (data) => {
     console.log('on chunk...', data.length)
 
-    const float32Chunk = float32ArrayFromPCMBinaryBuffer(data)
+    // const float32Chunk = float32ArrayFromPCMBinaryBuffer(data)
 
     console.log('will transcribe stream!!!!')
 
@@ -112,7 +113,11 @@ const LiveAudioScreen = () => {
 
     console.log('--> did transcribe stream!!!!')
 
-    audioBuffer.current?.push(...Array.from(float32Chunk)) // Spreads Float32Array into number[]
+    sendAudio(data)
+
+    // audioBuffer.current?.push(...Array.from(float32Chunk)) // Spreads Float32Array into number[]
+    audioBuffer.current?.push(data as unknown as number) // Spreads Float32Array into number[]
+    // this is obviously wrong....
   }
 
   const handleRecordPress = async () => {
