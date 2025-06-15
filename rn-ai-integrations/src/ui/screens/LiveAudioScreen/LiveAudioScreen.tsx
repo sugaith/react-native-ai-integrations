@@ -1,7 +1,6 @@
 // EventTarget polyfill is required for the Flow SDK to work in React Native
 import 'event-target-polyfill'
 import { Button, StyleSheet, Text, View } from 'react-native'
-import { GoogleGenAI, Modality } from '@google/genai'
 import {
   type MicrophoneDataCallback,
   type VolumeLevelCallback,
@@ -13,19 +12,25 @@ import {
   useMicrophonePermissions,
 } from '@speechmatics/expo-two-way-audio'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 
-const model = 'gemini-2.5-flash-preview-native-audio-dialog'
-
-const config = {
-  responseModalities: [Modality.AUDIO],
-  systemInstruction:
-    'You are a helpful assistant and answer in a friendly tone.',
+// Helper function to convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer: ArrayBufferLike): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const len = bytes.byteLength
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary) // btoa is available in modern RN environments
 }
 
 function FlowTest() {
   const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false) // Added for connection attempt
   const [audioInitialized, setAudioInitialized] = useState(false)
+  const [serverResponseText, setServerResponseText] = useState('') // Added for server text messages
+  const wsRef = useRef<WebSocket | null>(null)
 
   const isRecording = useIsRecording()
 
@@ -37,16 +42,37 @@ function FlowTest() {
     }
 
     initializeAudio()
+
+    // Cleanup WebSocket on component unmount
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+    }
   }, [])
 
   // Setup a handler for the "onMicrophoneData" event from Expo Two Way Audio module
   useExpoTwoWayAudioEventListener(
     'onMicrophoneData',
     useCallback<MicrophoneDataCallback>((event) => {
-      console.log('onMicrophoneData', event)
-
-      // in here, we have to probably send the PCM data to Google's Live Api
-      // sendAudio(event.data.buffer) // implement this methid
+      // console.log('onMicrophoneData', event) // Keep for debugging if needed
+      if (
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        event.data.buffer
+      ) {
+        try {
+          const base64Audio = arrayBufferToBase64(event.data.buffer)
+          const message = {
+            realtime_input: {
+              media_chunks: [{ mime_type: 'audio/pcm', data: base64Audio }],
+            },
+          }
+          wsRef.current.send(JSON.stringify(message))
+        } catch (error) {
+          console.error('Error sending audio data:', error)
+        }
+      }
     }, []),
   )
 
@@ -69,13 +95,73 @@ function FlowTest() {
   // Handle clicks to the 'Connect/Disconnect' button
   const handleToggleConnect = useCallback(async () => {
     if (isConnected) {
-      setIsConnected(false)
-      // perform disconnection logic
+      if (wsRef.current) {
+        wsRef.current.close()
+        // wsRef.current will be set to null in the onclose handler
+      }
     } else {
-      // perform connection logic here
-      setIsConnected(true)
+      setIsConnecting(true)
+      setServerResponseText('') // Clear previous responses
+      // Replace 'localhost' with your machine's network IP if running on a physical device
+      // or if localhost doesn't resolve correctly from the emulator.
+      const ws = new WebSocket('ws://192.168.1.123:9083')
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('WebSocket connected')
+        setIsConnected(true)
+        setIsConnecting(false)
+        // Send config message
+        ws.send(JSON.stringify({ setup: {} }))
+        // Start recording if not already
+        if (!isRecording) {
+          toggleRecording(true)
+        }
+      }
+
+      ws.onmessage = (event) => {
+        console.log('WebSocket message received:', event.data) // Keep for debugging
+        try {
+          const message = JSON.parse(event.data as string)
+          if (message.text) {
+            setServerResponseText((prev) => prev + message.text + '\n')
+          }
+          if (message.audio) {
+            // Assuming message.audio is base64 encoded PCM data
+            playPCMData(message.audio)
+          }
+        } catch (error) {
+          console.error('Error processing message from server:', error)
+          setServerResponseText(
+            (prev) => prev + 'Error processing server message.' + '\n',
+          )
+        }
+      }
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        setServerResponseText(
+          (prev) => prev + 'WebSocket error. Check console.' + '\n',
+        )
+        setIsConnected(false)
+        setIsConnecting(false)
+        if (isRecording) {
+          toggleRecording(false)
+        }
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected')
+        setIsConnected(false)
+        setIsConnecting(false)
+        wsRef.current = null
+        if (isRecording) {
+          // Optionally stop recording on disconnect
+          // toggleRecording(false)
+        }
+      }
     }
-  }, [isConnected])
+  }, [isConnected, isRecording])
 
   // Handle clicks to the 'Mute/Unmute' button
   const handleToggleMute = useCallback(() => {
@@ -85,20 +171,32 @@ function FlowTest() {
   return (
     <View style={styles.container}>
       <View style={styles.VolumeDisplayContainer}></View>
-      <View>
-        <Text>
-          {isConnected
-            ? isRecording
-              ? "I'm ready to listen. Try saying something!"
-              : 'Muted. Unmute to start a conversation'
-            : 'Disconnected'}
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingHorizontal: 20,
+        }}
+      >
+        <Text style={{ textAlign: 'center', marginBottom: 10 }}>
+          {isConnecting
+            ? 'Connecting...'
+            : isConnected
+              ? isRecording
+                ? 'Listening... Try saying something!'
+                : 'Muted. Unmute to start talking.'
+              : 'Disconnected. Press Connect.'}
+        </Text>
+        <Text style={{ textAlign: 'left', width: '100%' }} numberOfLines={10}>
+          {serverResponseText || 'Server responses will appear here...'}
         </Text>
       </View>
       <View style={styles.bottomBar}>
         <View style={styles.buttonContainer}>
           <Button
             title={isConnected ? 'Disconnect' : 'Connect'}
-            disabled={!audioInitialized}
+            disabled={!audioInitialized || isConnecting}
             onPress={handleToggleConnect}
           />
 
@@ -171,39 +269,5 @@ function LiveAudioScreen() {
 
   return <FlowTest />
 }
-
-const styles2 = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    padding: 50,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    width: '100%',
-    marginBottom: 20,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'lightgray',
-  },
-  VolumeDisplayContainer: {
-    position: 'relative',
-    width: 150,
-    height: 150,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  volumeDisplay: {
-    position: 'absolute',
-  },
-})
 
 export { LiveAudioScreen }
