@@ -11,6 +11,7 @@ import {
   useIsRecording,
   useMicrophonePermissions,
 } from '@speechmatics/expo-two-way-audio'
+import { Buffer } from 'buffer'
 
 import { useCallback, useEffect, useState, useRef } from 'react'
 
@@ -79,21 +80,21 @@ function FlowTest() {
     }, []),
   )
 
-  // this is just here for convenience / experimentation. use if needed
-  useExpoTwoWayAudioEventListener(
-    'onInputVolumeLevelData',
-    useCallback<VolumeLevelCallback>((event) => {
-      console.log('volume level Output fired... ', event)
-    }, []),
-  )
+  // // this is just here for convenience / experimentation. use if needed
+  // useExpoTwoWayAudioEventListener(
+  //   'onInputVolumeLevelData',
+  //   useCallback<VolumeLevelCallback>((event) => {
+  //     console.log('onInputVolumeLevelData...', event)
+  //   }, []),
+  // )
 
-  // this is just here for convenience / experimentation. use if needed
-  useExpoTwoWayAudioEventListener(
-    'onOutputVolumeLevelData',
-    useCallback<VolumeLevelCallback>((event) => {
-      console.log('volume level Output fired... ', event)
-    }, []),
-  )
+  // // this is just here for convenience / experimentation. use if needed
+  // useExpoTwoWayAudioEventListener(
+  //   'onOutputVolumeLevelData',
+  //   useCallback<VolumeLevelCallback>((event) => {
+  //     console.log('onOutputVolumeLevelData...', event)
+  //   }, []),
+  // )
 
   // Handle clicks to the 'Connect/Disconnect' button
   const handleToggleConnect = useCallback(async () => {
@@ -102,6 +103,7 @@ function FlowTest() {
         wsRef.current.close()
         // wsRef.current will be set to null in the onclose handler
       }
+      setIsConnected(false)
     } else {
       setIsConnecting(true)
       setServerResponseText('') // Clear previous responses
@@ -116,32 +118,29 @@ function FlowTest() {
         setIsConnecting(false)
         // Send config message
         ws.send(JSON.stringify({ setup: {} }))
-        // Start recording if not already
-        if (!isRecording) {
-          toggleRecording(true)
-        }
       }
 
       ws.onmessage = (event) => {
         console.log(
           'WebSocket message received!!!!! look down!!!\n',
-          event.data,
+          event?.data?.audio ? event.data.audio.length : event.data,
         ) // Keep for debugging
-        // try {
-        //   const message = JSON.parse(event.data as string)
-        //   if (message.text) {
-        //     setServerResponseText((prev) => prev + message.text + '\n')
-        //   }
-        //   if (message.audio) {
-        //     // Assuming message.audio is base64 encoded PCM data
-        //     playPCMData(message.audio)
-        //   }
-        // } catch (error) {
-        //   console.error('Error processing message from server:', error)
-        //   setServerResponseText(
-        //     (prev) => prev + 'Error processing server message.' + '\n',
-        //   )
-        // }
+        try {
+          const message = JSON.parse(event.data as string)
+          if (message.text) {
+            setServerResponseText((prev) => prev + message.text + '\n')
+          }
+          if (message.audio) {
+            const buffer = Buffer.from(message.audio, 'base64')
+            const pcmData = new Uint8Array(buffer)
+            playPCMData(pcmData)
+          }
+        } catch (error) {
+          console.error('Error processing message from server:', error)
+          setServerResponseText(
+            (prev) => prev + 'Error processing server message.' + '\n',
+          )
+        }
       }
 
       ws.onerror = (error) => {

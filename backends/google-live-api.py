@@ -1,4 +1,4 @@
-## pip install --upgrade google-genai==0.3.0 google-generativeai==0.8.3 python-dotenv##
+## pip install --upgrade google-genai==0.3.0 google-generativeai==0.8.3 python-dotenv librosa soundfile ##
 import asyncio
 import json
 import os
@@ -12,6 +12,10 @@ import google.generativeai as generative
 import wave
 from dotenv import load_dotenv
 import traceback # Added import
+from pathlib import Path # Added import
+import librosa # Added import
+import soundfile as sf # Added import
+from google.genai import types as genai_types # Added import for types.Blob
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,6 +29,9 @@ if not GOOGLE_API_KEY:
 generative.configure(api_key=GOOGLE_API_KEY)
 MODEL = "gemini-2.0-flash-exp"  # use your model ID
 TRANSCRIPTION_MODEL = "gemini-1.5-flash-8b"
+
+# Define path for the test WAV file
+WAVE_FILE_PATH = Path(__file__).parent / "wave_file.wav"
 
 client = genai.Client(
   http_options={
@@ -47,6 +54,38 @@ async def gemini_session_handler(client_websocket: websockets):
         async with client.aio.live.connect(model=MODEL, config=config) as session:
             print("Successfully connected to Gemini API")
 
+            # --- Send test WAV file immediately after connection ---
+            print(f"Attempting to send test WAV file: {WAVE_FILE_PATH}")
+            if not WAVE_FILE_PATH.exists():
+                print(f"Error: Test WAV file not found at {WAVE_FILE_PATH}")
+                # Optionally send an error back to client if needed, though this is server-initiated
+                # await client_websocket.send(json.dumps({"error": f"Test WAV file not found: {WAVE_FILE_PATH}"}))
+            else:
+                try:
+                    y, sr = librosa.load(str(WAVE_FILE_PATH), sr=16000) # Load and resample to 16kHz
+                    
+                    pcm_buffer = io.BytesIO()
+                    sf.write(pcm_buffer, y, sr, format='RAW', subtype='PCM_16')
+                    pcm_buffer.seek(0)
+                    audio_bytes = pcm_buffer.getvalue()
+
+                    print(f"Sending {WAVE_FILE_PATH.name} as PCM data ({len(audio_bytes)} bytes) with rate {sr}Hz...")
+                    # Line 73: This replaces the 'send_realtime_input' method with 'send' and the correct payload structure.
+                    await session.send({
+                        "mime_type": f"audio/pcm;rate={sr}",
+                        "data": audio_bytes
+                    })
+                    print(f"Successfully sent {WAVE_FILE_PATH.name} as PCM to Gemini.")
+                    # Optionally send status to client if needed
+                    # await client_websocket.send(json.dumps({"status": f"Automatically sent {WAVE_FILE_PATH.name} as PCM."}))
+
+                except Exception as e_wav:
+                    print(f"Error processing/sending WAV file automatically: {e_wav}")
+                    traceback.print_exc()
+                    # Optionally send an error back to client
+                    # await client_websocket.send(json.dumps({"error": f"Error auto-sending WAV: {str(e_wav)}"}))
+            # --- End of automatic WAV send ---
+
             async def send_to_gemini():
                 """Sends messages from the client websocket to the Gemini API."""
                 print("send_to_gemini task started")
@@ -55,16 +94,24 @@ async def gemini_session_handler(client_websocket: websockets):
                       print(f"Relaying message from client to Gemini: {message[:200]}...") # Log first 200 chars
                       try:
                           data = json.loads(message)
+                          # Removed the "action": "send_test_wav" handling from here
                           if "realtime_input" in data:
-                              for chunk in data["realtime_input"]["media_chunks"]:
-                                  if chunk["mime_type"] == "audio/pcm":
-                                      await session.send({"mime_type": "audio/pcm", "data": chunk["data"]})
-                                      print("SENT AUDIO--- audio/pcm chunk to Gemini")
-                                  elif chunk["mime_type"] == "image/jpeg":
-                                      await session.send({"mime_type": "image/jpeg", "data": chunk["data"]})
-                                      print("Sent image/jpeg chunk to Gemini")
+                              for chunk_info in data["realtime_input"]["media_chunks"]:
+                                  if chunk_info["mime_type"] == "audio/pcm":
+                                      print(f"Received audio/pcm chunk from client (data: str preview {str(chunk_info['data'])[:30]}...) for sendR")
+                                      await session.send({"mime_type": "audio/pcm", "data": chunk_info["data"]})
+                                      print("SENT client audio/pcm chunk to Gemini via sendR")
+                                  elif chunk_info["mime_type"] == "image/jpeg":
+                                      await session.send({"mime_type": "image/jpeg", "data": chunk_info["data"]})
+                                      print("Sent client image/jpeg chunk to Gemini")
+                          # else:
+                          #     print(f"Unhandled message structure from client: {data}")
+
+                      except json.JSONDecodeError:
+                          print(f"Received non-JSON message from client, cannot process for actions: {message[:200]}")
                       except Exception as e:
                           print(f"Error processing/sending client message to Gemini: {e}")
+                          traceback.print_exc()
                   print("Client connection closed (send_to_gemini loop ended)")
                 except websockets.exceptions.ConnectionClosed as e:
                     print(f"send_to_gemini: WebSocket connection closed by client - {e}")
