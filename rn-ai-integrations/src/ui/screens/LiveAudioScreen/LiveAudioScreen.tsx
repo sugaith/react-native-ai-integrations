@@ -1,67 +1,114 @@
-import React, { useEffect, useState, useRef } from 'react'
+// EventTarget polyfill is required for the Flow SDK to work in React Native
+import 'event-target-polyfill'
+import { Button, StyleSheet, Text, View } from 'react-native'
+import { GoogleGenAI, Modality } from '@google/genai'
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  PermissionsAndroid,
-  Platform,
-} from 'react-native'
+  type MicrophoneDataCallback,
+  type VolumeLevelCallback,
+  initialize,
+  playPCMData,
+  toggleRecording,
+  useExpoTwoWayAudioEventListener,
+  useIsRecording,
+  useMicrophonePermissions,
+} from '@speechmatics/expo-two-way-audio'
 
-const LiveAudioScreen = () => {
-  const [status, setStatus] = useState('Connecting... but not')
-  const [isRecording, setIsRecording] = useState(false)
+import { useCallback, useEffect, useState } from 'react'
 
+const model = 'gemini-2.5-flash-preview-native-audio-dialog'
+
+const config = {
+  responseModalities: [Modality.AUDIO],
+  systemInstruction:
+    'You are a helpful assistant and answer in a friendly tone.',
+}
+
+function FlowTest() {
+  const [isConnected, setIsConnected] = useState(false)
+  const [audioInitialized, setAudioInitialized] = useState(false)
+
+  const isRecording = useIsRecording()
+
+  // Initialize Expo Two Way Audio
   useEffect(() => {
-    const askPermission = async () => {
-      if (Platform.OS === 'android') {
-        const permission = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        )
-        if (!permission) {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          )
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            console.log('Microphone permission denied')
-            return
-          }
-        }
-      }
+    const initializeAudio = async () => {
+      await initialize()
+      setAudioInitialized(true)
     }
 
-    askPermission().then()
+    initializeAudio()
   }, [])
 
-  const handleRecordPress = async () => {
-    if (isRecording) {
-      setIsRecording(false)
+  // Setup a handler for the "onMicrophoneData" event from Expo Two Way Audio module
+  useExpoTwoWayAudioEventListener(
+    'onMicrophoneData',
+    useCallback<MicrophoneDataCallback>((event) => {
+      console.log('onMicrophoneData', event)
+
+      // in here, we have to probably send the PCM data to Google's Live Api
+      // sendAudio(event.data.buffer) // implement this methid
+    }, []),
+  )
+
+  // this is just here for convenience / experimentation. use if needed
+  useExpoTwoWayAudioEventListener(
+    'onInputVolumeLevelData',
+    useCallback<VolumeLevelCallback>((event) => {
+      console.log('volume level Output fired... ', event)
+    }, []),
+  )
+
+  // this is just here for convenience / experimentation. use if needed
+  useExpoTwoWayAudioEventListener(
+    'onOutputVolumeLevelData',
+    useCallback<VolumeLevelCallback>((event) => {
+      console.log('volume level Output fired... ', event)
+    }, []),
+  )
+
+  // Handle clicks to the 'Connect/Disconnect' button
+  const handleToggleConnect = useCallback(async () => {
+    if (isConnected) {
+      setIsConnected(false)
+      // perform disconnection logic
     } else {
-      setIsRecording(true)
+      // perform connection logic here
+      setIsConnected(true)
     }
-  }
+  }, [isConnected])
+
+  // Handle clicks to the 'Mute/Unmute' button
+  const handleToggleMute = useCallback(() => {
+    toggleRecording(!isRecording)
+  }, [isRecording])
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Live Audio Stream</Text>
-      <Text style={styles.status}>{status}</Text>
-      <TouchableOpacity
-        style={[
-          styles.recordButton,
-          isRecording ? styles.recording : styles.notRecording,
-        ]}
-        onPress={handleRecordPress}
-        // disabled={recordingButtonDisabled}
-      >
-        <Text style={styles.buttonText}>
-          {isRecording ? 'Stop Recording' : 'Start Recording'}
+      <View style={styles.VolumeDisplayContainer}></View>
+      <View>
+        <Text>
+          {isConnected
+            ? isRecording
+              ? "I'm ready to listen. Try saying something!"
+              : 'Muted. Unmute to start a conversation'
+            : 'Disconnected'}
         </Text>
-      </TouchableOpacity>
-      <Text style={styles.instructions}>
-        {isRecording
-          ? 'Recording audio and sending to server...'
-          : 'Press the button to start recording audio.'}
-      </Text>
+      </View>
+      <View style={styles.bottomBar}>
+        <View style={styles.buttonContainer}>
+          <Button
+            title={isConnected ? 'Disconnect' : 'Connect'}
+            disabled={!audioInitialized}
+            onPress={handleToggleConnect}
+          />
+
+          <Button
+            title={isRecording ? 'Mute' : 'Unmute'}
+            disabled={!isConnected || !audioInitialized}
+            onPress={handleToggleMute}
+          />
+        </View>
+      </View>
     </View>
   )
 }
@@ -69,42 +116,93 @@ const LiveAudioScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  status: {
-    fontSize: 16,
-    marginBottom: 20,
-  },
-  recordButton: {
-    width: 200,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'space-evenly',
+    padding: 50,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
     marginBottom: 20,
   },
-  recording: {
-    backgroundColor: 'red',
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'lightgray',
   },
-  notRecording: {
-    backgroundColor: 'green',
+  VolumeDisplayContainer: {
+    position: 'relative',
+    width: 150,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  volumeDisplay: {
+    position: 'absolute',
   },
-  instructions: {
-    textAlign: 'center',
-    paddingHorizontal: 20,
-    fontSize: 16,
+})
+
+function LiveAudioScreen() {
+  const [micPermission, requestMicPermission] = useMicrophonePermissions()
+
+  console.log(micPermission)
+
+  if (!micPermission?.granted) {
+    return (
+      <View style={styles.container}>
+        <Text>Mic permission: {micPermission?.status}</Text>
+        <Button
+          title={
+            micPermission?.canAskAgain
+              ? 'Request permission'
+              : 'Cannot request permissions'
+          }
+          disabled={!micPermission?.canAskAgain}
+          onPress={requestMicPermission}
+        />
+      </View>
+    )
+  }
+
+  return <FlowTest />
+}
+
+const styles2 = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+    padding: 50,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'lightgray',
+  },
+  VolumeDisplayContainer: {
+    position: 'relative',
+    width: 150,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  volumeDisplay: {
+    position: 'absolute',
   },
 })
 
