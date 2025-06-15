@@ -46,47 +46,32 @@ async def gemini_session_handler(client_websocket: websockets):
         print("Attempting to connect to Gemini API...")
         async with client.aio.live.connect(model=MODEL, config=config) as session:
             print("Successfully connected to Gemini API")
-            stop_event = asyncio.Event() # MODIFIED: Added stop_event
 
             async def send_to_gemini():
                 """Sends messages from the client websocket to the Gemini API."""
                 print("send_to_gemini task started")
                 try:
                   async for message in client_websocket:
-                      if stop_event.is_set(): # MODIFIED: Check stop_event
-                          print("send_to_gemini: stop_event is set, exiting loop.")
-                          break
                       print(f"Relaying message from client to Gemini: {message[:200]}...") # Log first 200 chars
                       try:
                           data = json.loads(message)
                           if "realtime_input" in data:
-                              for chunk_idx, chunk in enumerate(data["realtime_input"]["media_chunks"]):
-                                  if stop_event.is_set(): # MODIFIED: Check stop_event before sending chunk
-                                      print(f"send_to_gemini: stop_event set before sending chunk {chunk_idx}, breaking from chunks.")
-                                      break
+                              for chunk in data["realtime_input"]["media_chunks"]:
                                   if chunk["mime_type"] == "audio/pcm":
                                       await session.send({"mime_type": "audio/pcm", "data": chunk["data"]})
-                                      print("Sent audio/pcm chunk to Gemini")
+                                      print("SENT AUDIO--- audio/pcm chunk to Gemini")
                                   elif chunk["mime_type"] == "image/jpeg":
                                       await session.send({"mime_type": "image/jpeg", "data": chunk["data"]})
                                       print("Sent image/jpeg chunk to Gemini")
-                              if stop_event.is_set(): # MODIFIED: Check if inner loop was broken by stop_event
-                                  print("send_to_gemini: stop_event was set during chunk processing, breaking from message loop.")
-                                  break 
                       except Exception as e:
                           print(f"Error processing/sending client message to Gemini: {e}")
-                          stop_event.set() # MODIFIED: Ensure stop_event is set on error
-                          break            # MODIFIED: Break loop on error
-                  print("Client connection closed or stop_event set (send_to_gemini loop ended)")
+                  print("Client connection closed (send_to_gemini loop ended)")
                 except websockets.exceptions.ConnectionClosed as e:
                     print(f"send_to_gemini: WebSocket connection closed by client - {e}")
-                    stop_event.set() # MODIFIED: Set stop_event
                 except Exception as e:
                      print(f"Error in send_to_gemini: {e}")
-                     stop_event.set() # MODIFIED: Set stop_event
                 finally:
-                   print("send_to_gemini task finishing") # MODIFIED: "finished" -> "finishing"
-                   stop_event.set() # MODIFIED: Ensure stop_event is set
+                   print("send_to_gemini task finished")
 
             async def receive_from_gemini():
                 """Receives responses from the Gemini API and forwards them to the client, looping until turn is complete."""
@@ -95,27 +80,21 @@ async def gemini_session_handler(client_websocket: websockets):
                 try:
                     # Get an async iterator from the session.receive() async iterable
                     response_aiter = aiter(session.receive())
-                    while True: # Loop will be broken by stop_event or other conditions
-                        if stop_event.is_set(): # MODIFIED: Check stop_event at start of loop
-                            print("receive_from_gemini: stop_event is set, exiting loop.")
-                            break
+                    while True:
                         try:
                             print("Waiting for response from Gemini...")
                             # Use anext() with asyncio.wait_for to get the next item with a timeout
-                            response = await asyncio.wait_for(anext(response_aiter), timeout=5.0) # MODIFIED: Timeout reduced to 5.0
-                            
-                            if stop_event.is_set(): # MODIFIED: Check stop_event immediately after await
-                                print("receive_from_gemini: stop_event set after anext, exiting.")
-                                break
+                            response = await asyncio.wait_for(anext(response_aiter), timeout=10.0) 
                             
                             if response is None: # Should ideally be caught by StopAsyncIteration
-                                print("Received None from Gemini (should be StopAsyncIteration if ended), continuing...")
+                                print("Received NADAAAAAAAAAAAAAAAA..None from Gemini (should be StopAsyncIteration if ended), continuing...")
                                 continue
 
                             if response.server_content is None:
                                 print(f'Unhandled server message type from Gemini! - {response}')
                                 continue
 
+                            print('RECEIVED FROM MF GEMINI!!!!!!')
                             model_turn = response.server_content.model_turn
                             if model_turn:
                                 print("Processing model_turn from Gemini...")
@@ -150,40 +129,34 @@ async def gemini_session_handler(client_websocket: websockets):
                             # Check if client websocket is still open using .state and websockets.protocol.State
                             if client_websocket.state != websockets.protocol.State.OPEN: # MODIFIED HERE
                                 print(f"receive_from_gemini: Client websocket is no longer OPEN (state: {client_websocket.state}). Breaking loop.")
-                                stop_event.set() # MODIFIED: Set stop_event
                                 break
                             continue 
                         except StopAsyncIteration:
                             print("receive_from_gemini: Gemini stream ended.")
-                            stop_event.set() # MODIFIED: Set stop_event
                             break # Exit the loop, as the stream is complete
-                        except websockets.exceptions.ConnectionClosed as e: # MODIFIED: Catch base ConnectionClosed
-                            print(f"receive_from_gemini: Client connection closed - {e}. Breaking loop.")
-                            stop_event.set() # MODIFIED: Set stop_event
+                        except websockets.exceptions.ConnectionClosedOK:
+                            print("receive_from_gemini: Client connection closed normally. Breaking loop.")
+                            break
+                        except websockets.exceptions.ConnectionClosedError as e:
+                            print(f"receive_from_gemini: Client connection closed with error - {e}. Breaking loop.")
                             break
                         except Exception as e:
                             print(f"Error in receive_from_gemini inner loop: {e}")
-                            stop_event.set() # MODIFIED: Set stop_event
                             break 
                 except Exception as e: # Outer exception block
                       print(f"Error in receive_from_gemini outer loop (repr): {repr(e)}")
                       print("Traceback for outer loop error:")
                       traceback.print_exc() # Print the full traceback
-                      stop_event.set() # MODIFIED: Set stop_event
                 finally:
-                      print("receive_from_gemini task finishing") #
-                      stop_event.set() # MODIFIED: Ensure stop_event is set
+                      print("receive_from_gemini task finished")
 
 
             # Start send loop
             send_task = asyncio.create_task(send_to_gemini())
-            send_task.set_name("send_to_gemini_task") # MODIFIED: Added task name
             # Launch receive loop as a background task
             receive_task = asyncio.create_task(receive_from_gemini())
-            receive_task.set_name("receive_from_gemini_task") # MODIFIED: Added task name
-            
             await asyncio.gather(send_task, receive_task)
-            print("Both send and receive tasks have completed.") # MODIFIED: Added completion log
+
 
     except Exception as e:
         print(f"Error in Gemini session: {e}")

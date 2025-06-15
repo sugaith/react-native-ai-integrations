@@ -68,7 +68,10 @@ function FlowTest() {
               media_chunks: [{ mime_type: 'audio/pcm', data: base64Audio }],
             },
           }
+          console.log('-- sending audio --')
+
           wsRef.current.send(JSON.stringify(message))
+          console.log('-- audio sent!! --')
         } catch (error) {
           console.error('Error sending audio data:', error)
         }
@@ -120,22 +123,25 @@ function FlowTest() {
       }
 
       ws.onmessage = (event) => {
-        console.log('WebSocket message received:', event.data) // Keep for debugging
-        try {
-          const message = JSON.parse(event.data as string)
-          if (message.text) {
-            setServerResponseText((prev) => prev + message.text + '\n')
-          }
-          if (message.audio) {
-            // Assuming message.audio is base64 encoded PCM data
-            playPCMData(message.audio)
-          }
-        } catch (error) {
-          console.error('Error processing message from server:', error)
-          setServerResponseText(
-            (prev) => prev + 'Error processing server message.' + '\n',
-          )
-        }
+        console.log(
+          'WebSocket message received!!!!! look down!!!\n',
+          event.data,
+        ) // Keep for debugging
+        // try {
+        //   const message = JSON.parse(event.data as string)
+        //   if (message.text) {
+        //     setServerResponseText((prev) => prev + message.text + '\n')
+        //   }
+        //   if (message.audio) {
+        //     // Assuming message.audio is base64 encoded PCM data
+        //     playPCMData(message.audio)
+        //   }
+        // } catch (error) {
+        //   console.error('Error processing message from server:', error)
+        //   setServerResponseText(
+        //     (prev) => prev + 'Error processing server message.' + '\n',
+        //   )
+        // }
       }
 
       ws.onerror = (error) => {
