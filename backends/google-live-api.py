@@ -11,6 +11,8 @@ from pydub import AudioSegment
 import google.generativeai as generative
 import wave
 from dotenv import load_dotenv
+# from pydub import AudioSegment # Duplicate import
+import simpleaudio as sa
 import traceback # Added import
 from pathlib import Path # Added import
 import librosa # Added import
@@ -28,7 +30,8 @@ if not GOOGLE_API_KEY:
 
 generative.configure(api_key=GOOGLE_API_KEY)
 MODEL = "gemini-2.0-flash-exp"  # use your model ID
-TRANSCRIPTION_MODEL = "gemini-1.5-flash-8b"
+TRANSCRIPTION_MODEL = "gemini-2.0-flash-lite"
+CLIENT_AUDIO_SAMPLE_RATE = 16000 # Assuming client audio is 16kHz
 
 # Define path for the test WAV file
 WAVE_FILE_PATH = Path(__file__).parent / "wave_file.wav"
@@ -42,6 +45,8 @@ client = genai.Client(
 async def gemini_session_handler(client_websocket: websockets):
     """Handles the interaction with Gemini API within a websocket session."""
     print(f"New client connection from: {client_websocket.remote_address}")
+    client_audio_accumulator = b''  # Initialize accumulator for this session
+
     try:
         print("Waiting for config message from client...")
         config_message = await client_websocket.recv()
@@ -58,8 +63,6 @@ async def gemini_session_handler(client_websocket: websockets):
             print(f"Attempting to send test WAV file: {WAVE_FILE_PATH}")
             if not WAVE_FILE_PATH.exists():
                 print(f"Error: Test WAV file not found at {WAVE_FILE_PATH}")
-                # Optionally send an error back to client if needed, though this is server-initiated
-                # await client_websocket.send(json.dumps({"error": f"Test WAV file not found: {WAVE_FILE_PATH}"}))
             else:
                 try:
                     y, sr = librosa.load(str(WAVE_FILE_PATH), sr=16000) # Load and resample to 16kHz
@@ -70,40 +73,84 @@ async def gemini_session_handler(client_websocket: websockets):
                     audio_bytes = pcm_buffer.getvalue()
 
                     print(f"Sending {WAVE_FILE_PATH.name} as PCM data ({len(audio_bytes)} bytes) with rate {sr}Hz...")
-                    # Line 73: This replaces the 'send_realtime_input' method with 'send' and the correct payload structure.
                     await session.send({
                         "mime_type": f"audio/pcm;rate={sr}",
                         "data": audio_bytes
                     })
                     print(f"Successfully sent {WAVE_FILE_PATH.name} as PCM to Gemini.")
-                    # Optionally send status to client if needed
-                    # await client_websocket.send(json.dumps({"status": f"Automatically sent {WAVE_FILE_PATH.name} as PCM."}))
 
                 except Exception as e_wav:
                     print(f"Error processing/sending WAV file automatically: {e_wav}")
                     traceback.print_exc()
-                    # Optionally send an error back to client
-                    # await client_websocket.send(json.dumps({"error": f"Error auto-sending WAV: {str(e_wav)}"}))
             # --- End of automatic WAV send ---
 
             async def send_to_gemini():
                 """Sends messages from the client websocket to the Gemini API."""
+                nonlocal client_audio_accumulator # Correct placement: Allow modification of the accumulator from the enclosing scope
                 print("send_to_gemini task started")
                 try:
                   async for message in client_websocket:
                       print(f"Relaying message from client to Gemini: {message[:200]}...") # Log first 200 chars
                       try:
                           data = json.loads(message)
-                          # Removed the "action": "send_test_wav" handling from here
                           if "realtime_input" in data:
                               for chunk_info in data["realtime_input"]["media_chunks"]:
                                   if chunk_info["mime_type"] == "audio/pcm":
-                                      print(f"Received audio/pcm chunk from client (data: str preview {str(chunk_info['data'])[:30]}...) for sendR")
-                                      await session.send({"mime_type": "audio/pcm", "data": chunk_info["data"]})
-                                      print("SENT client audio/pcm chunk to Gemini via sendR")
+                                      print(f"Received audio/pcm chunk from client (data: str preview {str(chunk_info['data'])[:30]}...) for accumulation")
+                                      try:
+                                          pcm_chunk_bytes = base64.b64decode(chunk_info['data'])
+                                          client_audio_accumulator += pcm_chunk_bytes
+                                          print(f"Accumulated {len(pcm_chunk_bytes)} bytes. Total: {len(client_audio_accumulator)}")
+                                      except Exception as decode_exc:
+                                          print(f"Error decoding base64 audio data: {decode_exc}")
+                                          traceback.print_exc()
                                   elif chunk_info["mime_type"] == "image/jpeg":
+                                      # Assuming images are sent whole and not accumulated
                                       await session.send({"mime_type": "image/jpeg", "data": chunk_info["data"]})
                                       print("Sent client image/jpeg chunk to Gemini")
+                          elif "action" in data and data["action"] == "end_of_turn":
+                              print("Received end_of_turn from client.")
+                              if client_audio_accumulator:
+                                  print(f"Processing accumulated audio ({len(client_audio_accumulator)} bytes)...")
+                                  audio_to_process = client_audio_accumulator
+                                  client_audio_accumulator = b'' # Reset accumulator
+                                  
+
+                                  # --- Playback for debugging (convert to MP3 then play) ---
+                                #   try:
+                                #       print(f"Converting {len(audio_to_process)} bytes of PCM to MP3 for playback (rate: {CLIENT_AUDIO_SAMPLE_RATE}Hz)...")
+                                #       mp3_audio_base64 = convert_pcm_to_mp3(audio_to_process, rate=CLIENT_AUDIO_SAMPLE_RATE)
+                                #       if mp3_audio_base64:
+                                #           mp3_bytes = base64.b64decode(mp3_audio_base64)
+                                #           audio = AudioSegment.from_file(io.BytesIO(mp3_bytes), format="mp3")
+                                #           print(f"Playing MP3 audio (channels: {audio.channels}, sample_width: {audio.sample_width}, frame_rate: {audio.frame_rate})...")
+                                #           playback = sa.play_buffer(
+                                #               audio.raw_data,
+                                #               num_channels=audio.channels,
+                                #               bytes_per_sample=audio.sample_width,
+                                #               sample_rate=audio.frame_rate
+                                #           )
+                                #           playback.wait_done()
+                                #           print("Playback finished.")
+                                #       else:
+                                #           print("MP3 conversion for playback failed.")
+                                #   except Exception as play_exc:
+                                #       print(f"Could not play accumulated audio: {play_exc}")
+                                #       traceback.print_exc()
+                                  
+                                  # --- Send accumulated PCM data to Gemini ---
+                                  try:
+                                      print(f"Sending accumulated PCM data ({len(audio_to_process)} bytes) to Gemini at {CLIENT_AUDIO_SAMPLE_RATE}Hz...")
+                                      await session.send({
+                                          "mime_type": f"audio/pcm;rate={CLIENT_AUDIO_SAMPLE_RATE}",
+                                          "data": audio_to_process  # Send raw PCM bytes
+                                      })
+                                      print("Successfully sent accumulated PCM to Gemini.")
+                                  except Exception as send_gemini_exc:
+                                      print(f"Error sending accumulated audio to Gemini: {send_gemini_exc}")
+                                      traceback.print_exc()
+                              else:
+                                  print("end_of_turn received, but no audio accumulated.")
                           # else:
                           #     print(f"Unhandled message structure from client: {data}")
 
@@ -221,6 +268,29 @@ def transcribe_audio(audio_data):
         mp3_audio_base64 = convert_pcm_to_mp3(audio_data)
         if not mp3_audio_base64:
             return "Audio conversion failed."
+        
+        # # Play the MP3 audio for debugging (requires pydub and simpleaudio)
+        # mp3_bytes = base64.b64decode(mp3_audio_base64)
+        # audio = AudioSegment.from_file(io.BytesIO(mp3_bytes), format="mp3")
+        # playback = sa.play_buffer(
+        #     audio.raw_data,
+        #     num_channels=audio.channels,
+        #     bytes_per_sample=audio.sample_width,
+        #     sample_rate=audio.frame_rate
+        # )
+        # playback.wait_done()
+        # try:
+        #     mp3_bytes = base64.b64decode(mp3_audio_base64)
+        #     audio = AudioSegment.from_file(io.BytesIO(mp3_bytes), format="mp3")
+        #     playback = sa.play_buffer(
+        #         audio.raw_data,
+        #         num_channels=audio.channels,
+        #         bytes_per_sample=audio.sample_width,
+        #         sample_rate=audio.frame_rate
+        #     )
+        #     playback.wait_done()
+        # except Exception as play_exc:
+        #     print(f"Could not play audio: {play_exc}")
             
         # Create a client specific for transcription (assuming Gemini 1.5 flash)
         transcription_client = generative.GenerativeModel(model_name=TRANSCRIPTION_MODEL)
@@ -243,9 +313,10 @@ def transcribe_audio(audio_data):
 
     except Exception as e:
         print(f"Transcription error: {e}")
-        return "Transcription failed.", None
+        traceback.print_exc()
+        return "Transcription failed."
 
-def convert_pcm_to_mp3(pcm_data):
+def convert_pcm_to_mp3(pcm_data, rate=CLIENT_AUDIO_SAMPLE_RATE): # Updated default rate
     """Converts PCM audio to base64 encoded MP3."""
     try:
         # Create a WAV in memory first
@@ -253,7 +324,7 @@ def convert_pcm_to_mp3(pcm_data):
         with wave.open(wav_buffer, 'wb') as wav_file:
             wav_file.setnchannels(1)  # mono
             wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(24000)  # 24kHz
+            wav_file.setframerate(rate)  # 24kHz
             wav_file.writeframes(pcm_data)
         
         # Reset buffer position
@@ -276,8 +347,14 @@ def convert_pcm_to_mp3(pcm_data):
 
 
 async def main() -> None:
-    async with websockets.serve(gemini_session_handler, "0.0.0.0", 9083): # Changed "localhost" to "0.0.0.0"
-        print("Running websocket server on 0.0.0.0:9083...") # Updated print statement
+    async with websockets.serve(
+        gemini_session_handler, 
+        "0.0.0.0", 
+        9083, 
+        ping_interval=60,  # Send a ping every 60 seconds
+        ping_timeout=30    # Wait 30 seconds for a pong response
+    ): 
+        print("Running websocket server on 0.0.0.0:9083 with increased keepalive timeouts...") # Updated print statement
         await asyncio.Future()  # Keep the server running indefinitely
 
 

@@ -23,7 +23,7 @@ function arrayBufferToBase64(buffer: ArrayBufferLike): string {
   for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i])
   }
-  return btoa(binary) // btoa is available in modern RN environments
+  return Buffer.from(binary, 'binary').toString('base64')
 }
 
 function FlowTest() {
@@ -57,6 +57,7 @@ function FlowTest() {
     'onMicrophoneData',
     useCallback<MicrophoneDataCallback>((event) => {
       // console.log('onMicrophoneData', event) // Keep for debugging if needed
+
       if (
         wsRef.current &&
         wsRef.current.readyState === WebSocket.OPEN &&
@@ -69,10 +70,10 @@ function FlowTest() {
               media_chunks: [{ mime_type: 'audio/pcm', data: base64Audio }],
             },
           }
-          console.log('-- sending audio --')
+          // console.log('-- sending audio (base64 chunk) --')
 
           wsRef.current.send(JSON.stringify(message))
-          console.log('-- audio sent!! --')
+          // console.log('-- audio sent!! --')
         } catch (error) {
           console.error('Error sending audio data:', error)
         }
@@ -123,7 +124,7 @@ function FlowTest() {
       ws.onmessage = (event) => {
         console.log(
           'WebSocket message received!!!!! look down!!!\n',
-          event?.data?.audio ? event.data.audio.length : event.data,
+          event?.data?.startsWith(`{"audio"`) ? event.data.length : event.data,
         ) // Keep for debugging
         try {
           const message = JSON.parse(event.data as string)
@@ -170,7 +171,15 @@ function FlowTest() {
 
   // Handle clicks to the 'Mute/Unmute' button
   const handleToggleMute = useCallback(() => {
-    toggleRecording(!isRecording)
+    const newRecordingState = !isRecording
+    toggleRecording(newRecordingState)
+    if (!newRecordingState) {
+      // Means we just stopped recording (muted)
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        console.log('-- sending end_of_turn --')
+        wsRef.current.send(JSON.stringify({ action: 'end_of_turn' }))
+      }
+    }
   }, [isRecording])
 
   return (
