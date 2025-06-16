@@ -30,17 +30,24 @@ if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in your .env file.")
 
 generative.configure(api_key=GOOGLE_API_KEY)
-MODEL = "gemini-2.0-flash-exp"  # use your model ID
+MODEL = "gemini-2.0-flash-exp"  # this works and its fast
+# MODEL = "gemini-2.5-flash-preview-native-audio-dialog" # works sometimes, and its slow
 TRANSCRIPTION_MODEL = "gemini-2.0-flash-lite"
 CLIENT_AUDIO_SAMPLE_RATE = 16000 # Assuming client audio is 16kHz
 
 # Define path for the test WAV file
 WAVE_FILE_PATH = Path(__file__).parent / "wave_file.wav"
 
+config = types.LiveConnectConfig(response_modalities=["AUDIO"])
+# config = {
+    #     "response_modalities": ["AUDIO"],
+    #     # "system_instruction": "You are a helpful assistant and answer in a friendly tone.",
+    # }
+
 client = genai.Client(
-  http_options={
-    'api_version': 'v1alpha',
-  }
+#   http_options={
+#     'api_version': 'v1alpha',
+#   }
 )
 
 async def gemini_session_handler(client_websocket: websockets):
@@ -51,10 +58,10 @@ async def gemini_session_handler(client_websocket: websockets):
     try:
         print("Waiting for config message from client...")
         config_message = await client_websocket.recv()
-        print(f"Received config message from client: {config_message}")
-        config_data = json.loads(config_message)
-        # config = config_data.get("setup", {})
-        config = config_data.get("realtimeInput", {})
+        # print(f"Received config message from client: {config_message}")
+        # config_data = json.loads(config_message)
+      
+
         print(f"Parsed config: {config}")
 
         print("Attempting to connect to Gemini API...")
@@ -149,9 +156,15 @@ async def gemini_session_handler(client_websocket: websockets):
                                       await session.send_realtime_input(
                                           audio=types.Blob(data=audio_to_process, mime_type="audio/pcm;rate=16000")
                                       )
-                                      
+
+                                    #   await session.send_realtime_input(
+                                    #       audio_stream_end=True
+                                    #   )
+
+                                    #   await session.send_realtime_input(
+                                    #       activity_end={}
+                                    #   )
                                     #   await session.send_realtime_input(audio_stream_end=True)
-                                   
                                       print("Successfully sent accumulated PCM to Gemini.")
                                   except Exception as send_gemini_exc:
                                       print(f"Error sending accumulated audio to Gemini: {send_gemini_exc}")
