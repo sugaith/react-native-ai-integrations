@@ -101,33 +101,40 @@ async def gemini_session_handler(client_websocket: websockets):
                 nonlocal client_audio_accumulator # Correct placement: Allow modification of the accumulator from the enclosing scope
                 print("send_to_gemini task started")
                 try:
-                  async for message in client_websocket:
-                      print(f"Relaying message from client to Gemini: {message[:200]}...") # Log first 200 chars
-                      try:
-                          data = json.loads(message)
-                          if "realtime_input" in data:
-                              for chunk_info in data["realtime_input"]["media_chunks"]:
-                                  if chunk_info["mime_type"] == "audio/pcm":
-                                      print(f"Received audio/pcm chunk from client (data: str preview {str(chunk_info['data'])[:30]}...) for accumulation")
-                                      try:
-                                          pcm_chunk_bytes = base64.b64decode(chunk_info['data'])
-                                          client_audio_accumulator += pcm_chunk_bytes
-                                          print(f"Accumulated {len(pcm_chunk_bytes)} bytes. Total: {len(client_audio_accumulator)}")
-                                      except Exception as decode_exc:
-                                          print(f"Error decoding base64 audio data: {decode_exc}")
-                                          traceback.print_exc()
-                                  elif chunk_info["mime_type"] == "image/jpeg":
-                                      # Assuming images are sent whole and not accumulated
-                                      await session.send({"mime_type": "image/jpeg", "data": chunk_info["data"]})
-                                      print("Sent client image/jpeg chunk to Gemini")
-                          elif "action" in data and data["action"] == "end_of_turn":
-                              print("Received end_of_turn from client.")
-                              if client_audio_accumulator:
-                                  print(f"Processing accumulated audio ({len(client_audio_accumulator)} bytes)...")
-                                  audio_to_process = client_audio_accumulator
-                                  client_audio_accumulator = b'' # Reset accumulator
+                    async for message in client_websocket:
+                        print(f"Relaying message from client to Gemini: {message[:200]}...") # Log first 200 chars
+                        try:
+                            data = json.loads(message)
+                            if "realtime_input" in data:
+                                for chunk_info in data["realtime_input"]["media_chunks"]:
+                                    if chunk_info["mime_type"] == "audio/pcm":
+                                        print(f"Received audio/pcm chunk from client (data: str preview {str(chunk_info['data'])[:30]}...) for accumulation")
+                                        try:
+                                            pcm_chunk_bytes = base64.b64decode(chunk_info['data'])
+                                            client_audio_accumulator += pcm_chunk_bytes
+                                            print(f"Accumulated {len(pcm_chunk_bytes)} bytes. Total: {len(client_audio_accumulator)}")
 
-                                  ################################### --- Playback for debugging (convert to MP3 then play) ---
+                                            if len(client_audio_accumulator) > 399:
+                                                await session.send_realtime_input(
+                                                    audio=types.Blob(data=client_audio_accumulator, mime_type="audio/pcm;rate=16000")
+                                                )
+                                                client_audio_accumulator = b'' # Reset accumulator
+
+                                        except Exception as decode_exc:
+                                            print(f"Error decoding base64 audio data: {decode_exc}")
+                                            traceback.print_exc()
+                                    elif chunk_info["mime_type"] == "image/jpeg":
+                                        # Assuming images are sent whole and not accumulated
+                                        await session.send({"mime_type": "image/jpeg", "data": chunk_info["data"]})
+                                        print("Sent client image/jpeg chunk to Gemini")
+                            elif "action" in data and data["action"] == "end_of_turn":
+                                print("Received end_of_turn from client.")
+                                if client_audio_accumulator:
+                                    print(f"Processing accumulated audio ({len(client_audio_accumulator)} bytes)...")
+                                    audio_to_process = client_audio_accumulator
+                                    client_audio_accumulator = b'' # Reset accumulator
+
+                                    ################################### --- Playback for debugging (convert to MP3 then play) ---
                                 #   try:
                                 #       print(f"Converting {len(audio_to_process)} bytes of PCM to MP3 for playback (rate: {CLIENT_AUDIO_SAMPLE_RATE}Hz)...")
                                 #       mp3_audio_base64 = convert_pcm_to_mp3(audio_to_process, rate=CLIENT_AUDIO_SAMPLE_RATE)
@@ -148,14 +155,14 @@ async def gemini_session_handler(client_websocket: websockets):
                                 #   except Exception as play_exc:
                                 #       print(f"Could not play accumulated audio: {play_exc}")
                                 #       traceback.print_exc()
-                                  
-                                  ################################### --- Send accumulated PCM data to Gemini ---
-                                  try:
-                                      print(f"Sending accumulated PCM data ({len(audio_to_process)} bytes) to Gemini at {CLIENT_AUDIO_SAMPLE_RATE}Hz...")
+                                    
+                                    ################################### --- Send accumulated PCM data to Gemini ---
+                                    try:
+                                        print(f"Sending accumulated PCM data ({len(audio_to_process)} bytes) to Gemini at {CLIENT_AUDIO_SAMPLE_RATE}Hz...")
 
-                                      await session.send_realtime_input(
-                                          audio=types.Blob(data=audio_to_process, mime_type="audio/pcm;rate=16000")
-                                      )
+                                    #   await session.send_realtime_input(
+                                    #       audio=types.Blob(data=audio_to_process, mime_type="audio/pcm;rate=16000")
+                                    #   )
 
                                     #   await session.send_realtime_input(
                                     #       audio_stream_end=True
@@ -165,27 +172,27 @@ async def gemini_session_handler(client_websocket: websockets):
                                     #       activity_end={}
                                     #   )
                                     #   await session.send_realtime_input(audio_stream_end=True)
-                                      print("Successfully sent accumulated PCM to Gemini.")
-                                  except Exception as send_gemini_exc:
-                                      print(f"Error sending accumulated audio to Gemini: {send_gemini_exc}")
-                                      traceback.print_exc()
-                              else:
-                                  print("end_of_turn received, but no audio accumulated.")
-                          # else:
-                          #     print(f"Unhandled message structure from client: {data}")
+                                        print("Successfully sent accumulated PCM to Gemini.")
+                                    except Exception as send_gemini_exc:
+                                        print(f"Error sending accumulated audio to Gemini: {send_gemini_exc}")
+                                        traceback.print_exc()
+                                else:
+                                    print("end_of_turn received, but no audio accumulated.")
+                            # else:
+                            #     print(f"Unhandled message structure from client: {data}")
 
-                      except json.JSONDecodeError:
-                          print(f"Received non-JSON message from client, cannot process for actions: {message[:200]}")
-                      except Exception as e:
-                          print(f"Error processing/sending client message to Gemini: {e}")
-                          traceback.print_exc()
-                  print("Client connection closed (send_to_gemini loop ended)")
+                        except json.JSONDecodeError:
+                            print(f"Received non-JSON message from client, cannot process for actions: {message[:200]}")
+                        except Exception as e:
+                            print(f"Error processing/sending client message to Gemini: {e}")
+                            traceback.print_exc()
+                    print("Client connection closed (send_to_gemini loop ended)")
                 except websockets.exceptions.ConnectionClosed as e:
                     print(f"send_to_gemini: WebSocket connection closed by client - {e}")
                 except Exception as e:
-                     print(f"Error in send_to_gemini: {e}")
+                        print(f"Error in send_to_gemini: {e}")
                 finally:
-                   print("send_to_gemini task finished")
+                    print("send_to_gemini task finished")
 
             async def receive_from_gemini():
                 """Receives responses from the Gemini API and forwards them to the client, looping until turn is complete."""
