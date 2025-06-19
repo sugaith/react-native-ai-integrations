@@ -32,6 +32,7 @@ function FlowTest() {
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [serverResponseText, setServerResponseText] = useState('') // Added for server text messages
   const wsRef = useRef<WebSocket | null>(null)
+  const acc_buffer = useRef('')
 
   const isRecording = useIsRecording()
 
@@ -132,9 +133,17 @@ function FlowTest() {
             setServerResponseText((prev) => prev + message.text + '\n')
           }
           if (message.audio) {
+            acc_buffer.current += message.audio
+
             const buffer = Buffer.from(message.audio, 'base64')
             const pcmData = new Uint8Array(buffer)
             playPCMData(pcmData)
+          }
+          if (message.turn_complete) {
+            // if (!acc_buffer.current) return
+            acc_buffer.current = ''
+
+            console.log('🤐 Turn complete.. Gemini shut-up...')
           }
         } catch (error) {
           console.error('Error processing message from server:', error)
