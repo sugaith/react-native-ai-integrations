@@ -7,8 +7,10 @@ import {
   SpeechToTextScreen,
   LiveAudioScreen, // Added import
 } from '../screens/'
+import { HomeScreen } from '../screens/HomeScreen'
 
 type StackNavigatorScreens = {
+  HomeScreen: undefined
   ConversationListScreen: undefined
   ChatScreen: undefined
   CameraScreen: undefined
@@ -27,9 +29,14 @@ const Stack = createNativeStackNavigator<StackNavigatorScreens>()
 function Navigation() {
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="LiveAudioScreen">
+      <Stack.Navigator initialRouteName="HomeScreen">
         <Stack.Screen
-          name="LiveAudioScreen" // Added LiveAudioScreen
+          name="HomeScreen"
+          component={HomeScreen}
+          options={{ title: 'AI Integrations' }}
+        />
+        <Stack.Screen
+          name="LiveAudioScreen"
           component={LiveAudioScreen}
           options={{ title: 'Live Audio' }}
         />

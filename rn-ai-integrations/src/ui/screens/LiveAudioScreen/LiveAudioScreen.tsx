@@ -137,7 +137,7 @@ function FlowTest() {
 
             const buffer = Buffer.from(message.audio, 'base64')
             const pcmData = new Uint8Array(buffer)
-            playPCMData(pcmData)
+            playPCMData(pcmData, 24000)
           }
           if (message.turn_complete) {
             // if (!acc_buffer.current) return

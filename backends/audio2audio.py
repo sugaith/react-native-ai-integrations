@@ -9,17 +9,12 @@ import wave
 import io
 from pydub import AudioSegment
 from google import genai
-from google.genai import types
 import google.generativeai as generative
 from dotenv import load_dotenv
 import os
 
-
-# Load environment variables from .env file
 load_dotenv()
 
-# Load API key from environment
-# Use os.getenv to avoid KeyError if the variable is not set
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if not GOOGLE_API_KEY:
     raise ValueError("GOOGLE_API_KEY not found in environment variables. Please set it in your .env file.")
@@ -39,11 +34,11 @@ SEND_SAMPLE_RATE = 16000
 CHUNK_SIZE = 512
 CHANNELS = 1
 
+SYSTEM_INSTRUCTS_TALK_MODEL = """You are a assistant for high-profile Leaders. Act as one."""
+
 from google.genai.types import (
-    LiveConnectConfig,
-    SpeechConfig,
-    VoiceConfig,
-    PrebuiltVoiceConfig, Modality,
+    LiveConnectConfig, SpeechConfig,
+    VoiceConfig, PrebuiltVoiceConfig, Modality,
 )
 
 CONFIG = LiveConnectConfig(
@@ -55,19 +50,14 @@ CONFIG = LiveConnectConfig(
     # ),
     speech_config=SpeechConfig(
         voice_config=VoiceConfig(
-            prebuilt_voice_config=PrebuiltVoiceConfig(voice_name="Puck")
+            prebuilt_voice_config=PrebuiltVoiceConfig(voice_name="Leda")
         )
     ),
-    system_instruction="You are a helpful customer service assistant for an online store. You can help customers check the status of their orders. When asked about an order, you should ask for the order ID and then use the get_order_status tool to retrieve the information. Be courteous, professional, and provide all relevant details about shipping, delivery dates, and current status.",
+    system_instruction=SYSTEM_INSTRUCTS_TALK_MODEL,
 )
 
 
 async def audio_loop(client_websocket: websockets):
-    # audio_manager = AudioManager(
-    #     input_sample_rate=SEND_SAMPLE_RATE, output_sample_rate=RECEIVE_SAMPLE_RATE
-    # )
-    #
-    # await audio_manager.initialize()
     config_message = await client_websocket.recv()
 
     async with (
@@ -177,6 +167,7 @@ async def audio_loop(client_websocket: websockets):
         tg.create_task(send_pcm_to_gemini())
         tg.create_task(listen_gemini_send_client())
 
+
 def transcribe_audio(audio_data):
     """Transcribes audio using Gemini 1.5 Flash."""
     try:
@@ -205,9 +196,7 @@ def transcribe_audio(audio_data):
                 }
             ]
         )
-
         return response.text
-
     except Exception as e:
         print(f"Transcription error: {e}")
         traceback.print_exc()
