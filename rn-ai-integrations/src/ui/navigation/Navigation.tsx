@@ -75,7 +75,7 @@ function Navigation() {
             name="LiveAudioScreen"
             component={LiveAudioScreen}
             options={{
-              header: () => <Header />,
+              header: () => <Header title={'Voice Chat'} />,
             }}
           />
 
