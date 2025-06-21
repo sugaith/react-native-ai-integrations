@@ -9,6 +9,7 @@ type SearchInputProp = {
 function SearchInput({ searchQuery, setSearchQuery }: SearchInputProp) {
   return (
     <TextInput
+      className={'bg-background-second m-1.5 rounded-xl text-body'}
       placeholder="Search past chats..."
       value={searchQuery}
       onChangeText={setSearchQuery}

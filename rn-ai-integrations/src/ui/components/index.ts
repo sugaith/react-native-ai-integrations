@@ -1,5 +1,4 @@
 export * from './SearchInput'
-export * from './ChatHeader'
 export * from './ConversationItem'
 export * from './Spacer'
 export * from './TextInputModal'

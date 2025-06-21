@@ -21,31 +21,20 @@ const ConversationItem = ({ conversation }: ConversationItemProps) => {
   const lastMessage = conversation.messages.at(0)
 
   return (
-    <TouchableOpacity
-      onPress={openConversation}
-      // icon={
-      //   <Avatar circular size="$3">
-      //     <Avatar.Image
-      //       accessibilityLabel="Cam"
-      //       src="https://i.pravatar.cc/300"
-      //     />
-      //     <Avatar.Fallback backgroundColor="$blue10" />
-      //   </Avatar>
-      // }
-    >
-      <View>
+    <TouchableOpacity onPress={openConversation}>
+      <View className={'p-3 bg-background-second'}>
         <View>
-          <Text>{lastMessage?.user.name}</Text>
+          <Text className={'text-body text-2xl'}>{lastMessage?.user.name}</Text>
 
           <Spacer size={3} />
 
-          <Text>
+          <Text className={'text-body-second'}>
             {lastMessage?.createdAt.toLocaleString() ||
               new Date().toLocaleString()}
           </Text>
         </View>
 
-        <Text numberOfLines={1} ellipsizeMode="tail">
+        <Text className={'text-body'} numberOfLines={1} ellipsizeMode="tail">
           {lastMessage?.text.substring(0, 45) + '...'}
         </Text>
       </View>

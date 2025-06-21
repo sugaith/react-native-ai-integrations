@@ -11,9 +11,10 @@ import {
   useSaveConversationOnExit,
 } from './helpers'
 import { MessageBubble } from './MessageBubble'
-import { ChatHeader, Spacer } from 'src/ui/components'
+import { Spacer } from 'src/ui/components'
 import { MYSELF_USER } from 'src/utils'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useThemeStore } from '../../../store'
 
 type IMessageLike = IMessageBase64 & { like?: boolean }
 
@@ -64,10 +65,10 @@ function ChatScreen() {
 
   const { bottom } = useSafeAreaInsets()
 
+  const colorTheme = useThemeStore((state) => state.colorTheme)
+
   return (
     <>
-      <ChatHeader />
-
       <GiftedChat
         messages={messages}
         renderAvatarOnTop={true}
@@ -76,6 +77,9 @@ function ChatScreen() {
         renderActions={renderCameraButton}
         keyboardShouldPersistTaps="handled"
         renderMessage={renderMessage}
+        messagesContainerStyle={{
+          backgroundColor: colorTheme === 'dark' ? '#313030' : '#ffffff',
+        }}
       />
 
       <Spacer size={bottom} />

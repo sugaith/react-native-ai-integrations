@@ -10,7 +10,7 @@ function ConversationListScreen() {
   const [permission, requestPermission] = useCameraPermissions()
   useEffect(() => {
     if (!permission) {
-      requestPermission()
+      requestPermission().then()
     }
   }, [permission, requestPermission])
 
@@ -26,12 +26,10 @@ function ConversationListScreen() {
   })
 
   return (
-    <SafeAreaView style={{ padding: 4, flex: 1 }}>
+    <SafeAreaView className="bg-background" style={{ padding: 4, flex: 1 }}>
       {!conversationList.length ? (
-        <View
-          style={{ justifyContent: 'center', alignItems: 'center', flex: 1 }}
-        >
-          <Text>Start a new conversation</Text>
+        <View className={'justify-center items-center flex-1'}>
+          <Text className={'text-body'}>Start a new conversation</Text>
         </View>
       ) : (
         <>
@@ -39,6 +37,8 @@ function ConversationListScreen() {
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
           />
+
+          <View className={'h-3'}/>
 
           <FlatList
             data={filteredConversations}

@@ -45,14 +45,12 @@ function MessageBubble({ toggleLikeAction, ...rest }: MessageBubbleProps) {
 
   return (
     <GestureDetector gesture={doubleTapHandler}>
-      <View backgroundColor={'$background05'}>
+      <View>
         <Message {...rest} />
         {shouldShowLikeButton ? (
           <AnimatedHeart
+            className={'absolute right-9 bottom-3'}
             style={animatedStyle}
-            position="absolute"
-            right="$9"
-            bottom="$3"
           >
             <View style={{ backgroundColor: 'red', width: 10, height: 10 }} />
           </AnimatedHeart>
