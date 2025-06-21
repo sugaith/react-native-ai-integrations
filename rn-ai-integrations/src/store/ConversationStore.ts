@@ -18,6 +18,7 @@ type ConversationStore = {
 
 const useConversationStore = create<ConversationStore>((set, get) => ({
   conversationList: [],
+
   saveConversation: (conversation: Conversation) => {
     if (!conversation.messages.length) return
 
@@ -38,7 +39,9 @@ const useConversationStore = create<ConversationStore>((set, get) => ({
   },
 
   currentConversation: newConversation,
+
   setCurrentConversation: (currentConversation) => set({ currentConversation }),
+
   createNewConversation: () => set({ currentConversation: newConversation }),
 }))
 

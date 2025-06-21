@@ -10,6 +10,7 @@ import {
 import { HomeScreen } from '../screens/HomeScreen'
 import { View } from 'react-native'
 import { themes } from '../color-theme'
+import { useThemeStore } from '../../store'
 
 type StackNavigatorScreens = {
   HomeScreen: undefined
@@ -29,8 +30,10 @@ declare global {
 const Stack = createNativeStackNavigator<StackNavigatorScreens>()
 
 function Navigation() {
+  const colorTheme = useThemeStore((state) => state.colorTheme)
+
   return (
-    <View style={themes['light']} className={'flex-1 bg-background'}>
+    <View style={themes[colorTheme]} className={'flex-1 bg-background'}>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="HomeScreen">
           <Stack.Screen
