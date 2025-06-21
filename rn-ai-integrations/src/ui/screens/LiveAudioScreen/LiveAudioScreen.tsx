@@ -3,7 +3,6 @@ import 'event-target-polyfill'
 import { Button, StyleSheet, Text, View } from 'react-native'
 import {
   type MicrophoneDataCallback,
-  type VolumeLevelCallback,
   initialize,
   playPCMData,
   toggleRecording,
@@ -14,7 +13,6 @@ import {
 import { Buffer } from 'buffer'
 
 import { useCallback, useEffect, useState, useRef } from 'react'
-import { themes } from '../../color-theme'
 
 // Helper function to convert ArrayBuffer to Base64
 function arrayBufferToBase64(buffer: ArrayBufferLike): string {
