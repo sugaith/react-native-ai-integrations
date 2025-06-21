@@ -1,7 +1,6 @@
 import asyncio
 import traceback
 import pyaudio
-from collections import deque
 import json
 import websockets
 import base64

@@ -14,6 +14,7 @@ import {
 import { Buffer } from 'buffer'
 
 import { useCallback, useEffect, useState, useRef } from 'react'
+import { themes } from '../../color-theme'
 
 // Helper function to convert ArrayBuffer to Base64
 function arrayBufferToBase64(buffer: ArrayBufferLike): string {
@@ -192,8 +193,7 @@ function FlowTest() {
   }, [isRecording])
 
   return (
-    <View style={styles.container}>
-      <View style={styles.VolumeDisplayContainer}></View>
+    <View className={'flex-1 items-center p-3 bg-background text-accent'}>
       <View
         style={{
           flex: 1,
@@ -202,19 +202,21 @@ function FlowTest() {
           paddingHorizontal: 20,
         }}
       >
-        <Text style={{ textAlign: 'center', marginBottom: 10 }}>
+        <Text className={`text-${!isConnected ? 'accent' : 'accent-second'}`}>
           {isConnecting
             ? 'Connecting...'
             : isConnected
               ? isRecording
                 ? 'Listening... Try saying something!'
                 : 'Muted. Unmute to start talking.'
-              : 'Disconnected. Press Connect.'}
+              : 'Disconnfdfdfected. Press Connect.'}
         </Text>
-        <Text style={{ textAlign: 'left', width: '100%' }} numberOfLines={10}>
+
+        <Text className={'text-body'} numberOfLines={10}>
           {serverResponseText || 'Server responses will appear here...'}
         </Text>
       </View>
+
       <View style={styles.bottomBar}>
         <View style={styles.buttonContainer}>
           <Button
