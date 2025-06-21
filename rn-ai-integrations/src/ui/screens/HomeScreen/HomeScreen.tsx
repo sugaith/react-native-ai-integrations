@@ -55,7 +55,7 @@ const HomeScreen = () => {
       <TouchableOpacity onPress={() => navigate('LiveAudioScreen')}>
         <View className={'flex-row py-3 px-6'}>
           <View className={'flex-auto'}>
-            <Text className={'text-body text-2xl'}>Google Live Voice</Text>
+            <Text className={'text-body text-2xl'}>Gemini Voice Live</Text>
 
             <Text className={'text-body-second'}>
               {`Engage with live voice conversation using Google Live API!`}
