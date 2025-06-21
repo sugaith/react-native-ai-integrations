@@ -5,12 +5,13 @@ import {
   ChatScreen,
   ConversationListScreen,
   SpeechToTextScreen,
-  LiveAudioScreen, // Added import
+  LiveAudioScreen,
 } from '../screens/'
 import { HomeScreen } from '../screens/HomeScreen'
 import { View } from 'react-native'
 import { themes } from '../color-theme'
 import { useThemeStore } from '../../store'
+import { Header } from '../components'
 
 type StackNavigatorScreens = {
   HomeScreen: undefined
@@ -18,7 +19,7 @@ type StackNavigatorScreens = {
   ChatScreen: undefined
   CameraScreen: undefined
   SpeechToTextScreen: undefined
-  LiveAudioScreen: undefined // Added screen to type
+  LiveAudioScreen: undefined
 }
 
 declare global {
@@ -39,29 +40,52 @@ function Navigation() {
           <Stack.Screen
             name="HomeScreen"
             component={HomeScreen}
-            options={{ title: 'AI Integrations' }}
+            options={{
+              header: () => (
+                <Header title={'AI Integrations'} showBackButton={false} />
+              ),
+            }}
           />
-          <Stack.Screen
-            name="LiveAudioScreen"
-            component={LiveAudioScreen}
-            options={{ title: 'Live Audio' }}
-          />
+
           <Stack.Screen
             name="ConversationListScreen"
             component={ConversationListScreen}
-            options={{ title: 'Your Chats' }}
+            options={{
+              header: () => <Header title={'Your Chats'} />,
+            }}
           />
+
           <Stack.Screen
             name="ChatScreen"
             component={ChatScreen}
-            options={{ headerShown: false }}
+            options={{
+              header: () => <Header />,
+            }}
           />
+
           <Stack.Screen
             name="SpeechToTextScreen"
             component={SpeechToTextScreen}
-            options={{ headerShown: false }}
+            options={{
+              header: () => <Header />,
+            }}
           />
-          <Stack.Screen name="CameraScreen" component={CameraScreen} />
+
+          <Stack.Screen
+            name="LiveAudioScreen"
+            component={LiveAudioScreen}
+            options={{
+              header: () => <Header />,
+            }}
+          />
+
+          <Stack.Screen
+            name="CameraScreen"
+            component={CameraScreen}
+            options={{
+              header: () => <Header />,
+            }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </View>

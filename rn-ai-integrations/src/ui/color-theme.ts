@@ -16,7 +16,7 @@ export const themes = {
     '--color-body-default': '#bac4d3',
     '--color-body-second': '#5974d2',
     '--color-background-default': '#151414',
-    '--color-background-second': '#2a242f',
+    '--color-background-second': '#252525',
     '--color-container-default': '#e3ba64',
     '--color-container-second': '#d77732',
     '--color-accent-default': '#ea2b2b',
